@@ -47,6 +47,15 @@ Task tool: subagent_type="general-purpose", model="haiku"
 Prompt: "Read .claude/agents/refrakt.md for instructions, then process prompts_data.json"
 ```
 
+After the Refrakt agent writes refracted lyrics, spawn the suno-prompt agent to optimize tags with vocal descriptors:
+
+```
+Task tool: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/suno-prompt.md for instructions, then process prompts_data.json"
+```
+
+This reads the research field (which now includes vocal character description) and the vocal prompting guide to generate optimized style tags with explicit vocal descriptors (gender, tone, texture) placed early for maximum weight.
+
 This writes `prompts_data.json`. Read that file to get the list of prompts. Each entry has:
 - `source_track_id` — Spotify track ID (for tracking)
 - `source_track_name` — original track name (for reference only, never sent to Suno)
@@ -142,82 +151,32 @@ The ref values change every snapshot. Always take a fresh snapshot before lookin
 
 For each prompt from `prompts_data.json`:
 
-#### a) Take a fresh snapshot
+#### a) Fill the form using `bin/suno-fill-form`
+
+This helper reads `prompts_data.json` and fills Styles, Title, Lyrics, and Instrumental toggle in a single `playwright-cli run-code` call — avoiding shell escaping issues with multi-line lyrics:
 
 ```bash
-playwright-cli snapshot
+bin/suno-fill-form --index 0              # fill first prompt (0-based)
+bin/suno-fill-form --index 1              # fill second prompt
+bin/suno-fill-form --dry-run              # preview without touching browser
 ```
 
-#### b) Identify the form elements
+The helper uses Playwright's native locator API (CSS selectors on placeholder text) rather than snapshot ref IDs, so it's resilient to ref rotation.
 
-Search the snapshot for these elements:
+**If the prompt has an empty `prompt` field:** The Refrakt agent and suno-prompt agent should have already populated the `prompt` and `tags` fields. If `prompt` is still empty, run the agents first before filling the form.
 
-| Element | What to look for | Notes |
-|---------|-----------------|-------|
-| **Styles textbox** | A textbox near a "Styles" heading. May have placeholder text like "power chords, gritty flow..." or "Describe the style of music..." | Usually the first/larger textbox |
-| **Title textbox** | A textbox with "Song Title" or "Title" placeholder | Usually a smaller textbox below Styles |
-| **Lyrics textbox** | A textbox with placeholder "Write some lyrics or a prompt — or leave blank for instrumental" | The large text area for lyrics/prompts |
-| **Instrumental toggle** | A button, switch, or checkbox labeled "Instrumental" | Should be enabled; check if already toggled on |
-| **Create button** | A button labeled "Create" or "Create song" | The submit button |
+**If `suno-fill-form` fails** (e.g., can't find a field), fall back to manual filling:
 
-**Search strategy:** Look for these patterns (case-insensitive) in snapshot lines:
-- Styles: `textbox` near text containing "style", "tag", "power chords", "gritty", "synth", "describe"
-- Title: `textbox` near "title" or "song title"
-- Lyrics: `textbox` near "lyrics" or "prompt" or "write some lyrics"
-- Instrumental: `button`/`switch`/`checkbox` near "instrumental"
-- Create: `button` with text "Create"
+1. Take a snapshot: `playwright-cli snapshot`
+2. Find the element refs by searching the snapshot
+3. Fill individually: `playwright-cli fill <ref> "<text>"`
 
-If a UI element isn't found, take a screenshot for debugging:
+For multi-line lyrics in the manual fallback, use `playwright-cli run-code`:
 ```bash
-playwright-cli screenshot
-```
-Then read the screenshot image to visually identify the layout.
-
-#### c) Fill the Styles field
-
-```bash
-playwright-cli fill <styles_ref> "<tags from prompt>"
+playwright-cli run-code "async page => { await page.locator('textarea[placeholder*=\"lyric\" i]').first().fill('your lyrics here'); }"
 ```
 
-#### d) Fill the Title field
-
-```bash
-playwright-cli fill <title_ref> "<invented_title from prompt>"
-```
-
-#### e) Fill the Lyrics field
-
-**If the prompt has a non-empty `prompt` field:** Fill the Lyrics textbox directly with its contents (structural metatags for instrumentals, or pre-written lyrics).
-
-**If the prompt has an empty `prompt` field and an `original_lyrics` field:** The prompt is for a vocal track that needs new lyrics written. Use the `original_lyrics` (fetched from Genius) and `research` (from Perplexity) as inspiration to write **completely new, original lyrics** that:
-- Follow a similar thematic arc, mood, and emotional trajectory as the original
-- Use fresh imagery and different words — NOT a copy or close paraphrase
-- Preserve the structural feel (verse/chorus/bridge pattern) but with new content
-- Use Suno metatags: `[Verse 1]`, `[Chorus]`, `[Verse 2]`, `[Bridge]`, `[Chorus]`, `[Outro]`
-- Keep to ~200 words of lyrics
-- Match the sonic character described in the `tags` field
-
-Then fill the Lyrics textbox with the newly generated lyrics.
-
-**If `original_lyrics` is empty** (instrumental or not on Genius), generate lyrics from the `research` field's thematic description instead.
-
-```bash
-playwright-cli fill <lyrics_ref> "<lyrics content>"
-```
-
-#### f) Set Instrumental toggle
-
-Check the prompt's `make_instrumental` field. Take a fresh snapshot to check the Instrumental toggle state. Look for "pressed", "checked", or similar indicators.
-
-- If `make_instrumental` is `true` and toggle is **off** → click to enable
-- If `make_instrumental` is `false` and toggle is **on** → click to disable
-- If already in the correct state → do nothing
-
-```bash
-playwright-cli click <instrumental_ref>
-```
-
-#### g) Click Create
+#### b) Click Create
 
 ```bash
 playwright-cli click <create_ref>
@@ -225,7 +184,7 @@ playwright-cli click <create_ref>
 
 Wait ~3 seconds, then take a snapshot to check for captcha.
 
-#### h) Check for captcha
+#### c) Check for captcha
 
 Search the post-click snapshot for any of these strings (case-insensitive):
 - "Select everything"
@@ -239,7 +198,7 @@ Search the post-click snapshot for any of these strings (case-insensitive):
 
 **If no captcha:** Proceed. With `--persistent`, captcha should not appear.
 
-#### i) Wait between submissions
+#### d) Wait between submissions
 
 Wait ~12 seconds before the next prompt to let the generation queue settle.
 
@@ -340,6 +299,15 @@ playwright-cli click <ref>
 playwright-cli press Control+a
 playwright-cli type "<new text>"
 ```
+
+### Suno React form — element identification notes
+Suno uses React components, not raw HTML `<input>`/`<textarea>` elements. Key findings:
+- **`getAttribute('placeholder')` returns null** on these components. Don't use CSS selectors like `textarea[placeholder*="style"]` — they won't match.
+- **Use `getByRole('textbox', { name: /pattern/ })`** which reads the accessible name from the accessibility tree (same names shown in `playwright-cli snapshot`).
+- **`fill()` works** for Lyrics and Title fields when called via `getByRole` locators, even with multi-line content.
+- **The Styles textbox has rotating placeholder text** (e.g., "smooth transitions, wistful...", "power chords, gritty flow...", "gothic symphonic metal..."). Match it by exclusion: find all textboxes, skip lyrics/title/search/enhance/workspace.
+- **`insertText()` works for Styles** when `fill()` doesn't trigger React state — use click + Cmd+A + Backspace + insertText.
+- **`keyboard.type()` is too slow** for lyrics (types character by character). Use `fill()` or `insertText()` instead.
 
 ---
 

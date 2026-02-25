@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+suno-fill-form — Fill the Suno custom-mode form from prompts_data.json.
+
+Assumes the browser is already open (via playwright-cli open --headed --persistent)
+with session cookies injected and Custom mode active. Fills Styles, Title, Lyrics,
+and sets the Instrumental toggle for each prompt, then reports back. Does NOT click
+Create — Claude handles that interactively (for captcha checking).
+
+Usage:
+    bin/suno-fill-form                    # fill from first prompt in prompts_data.json
+    bin/suno-fill-form --index 0          # fill specific prompt (0-based)
+    bin/suno-fill-form --dry-run          # show what would be filled, no browser
+"""
+
+import argparse
+import json
+import os
+import site
+import glob as _glob
+import subprocess
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_sp = _glob.glob(str(PROJECT_ROOT / ".venv/lib/python*/site-packages"))
+if _sp:
+    site.addsitedir(_sp[0])
+
+PROMPTS_FILE = PROJECT_ROOT / "prompts_data.json"
+
+
+def pw(*args: str, timeout: int = 30) -> str:
+    """Run a playwright-cli command and return stdout."""
+    cmd = ["playwright-cli"] + list(args)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        print(f"ERROR: playwright-cli failed: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    return result.stdout
+
+
+def fill_form(prompt: dict):
+    """Fill all form fields for one prompt via a single playwright-cli run-code call."""
+    # Use json.dumps for safe JS string embedding (JSON strings are valid JS literals)
+    tags_js = json.dumps(prompt.get("tags", ""))
+    title_js = json.dumps(prompt.get("invented_title", ""))
+    lyrics_js = json.dumps(prompt.get("prompt", ""))
+    is_instrumental = "true" if prompt.get("make_instrumental", False) else "false"
+
+    # Build JS without f-string/template-literal conflicts — all dynamic values via json.dumps.
+    #
+    # Key findings from debugging Suno's React form:
+    # - Suno uses React components, not raw HTML inputs. getAttribute('placeholder') returns null.
+    # - Use getByRole('textbox', {name: /pattern/}) which reads the accessible name from the
+    #   accessibility tree (same names shown in playwright-cli snapshots).
+    # - fill() works for all fields when called directly via getByRole locators.
+    # - The Styles textbox has rotating placeholder text — match by exclusion (get all textboxes,
+    #   subtract lyrics/title/search/enhance/workspace).
+    # - Lyrics field: fill() works with multi-line content (tested directly).
+    js = (
+        "async page => {\n"
+        f"  const tags = {tags_js};\n"
+        f"  const title = {title_js};\n"
+        f"  const lyrics = {lyrics_js};\n"
+        f"  const isInstrumental = {is_instrumental};\n"
+        "\n"
+        "  // Lyrics — match by accessible name (from placeholder text in React component)\n"
+        "  const lyricsBox = page.getByRole('textbox', { name: /Write some|lyric/i }).first();\n"
+        "  // Title — match by accessible name\n"
+        "  const titleBox = page.getByRole('textbox', { name: /Song Title|Title \\(Optional\\)/i }).first();\n"
+        "\n"
+        "  // Styles — the placeholder text rotates, so find by exclusion.\n"
+        "  // Get the accessible name of lyrics and title boxes, then find the textbox that isn't them.\n"
+        "  const allBoxes = page.getByRole('textbox');\n"
+        "  const count = await allBoxes.count();\n"
+        "  let stylesBox = null;\n"
+        "  const lyricsName = await lyricsBox.evaluate(el => el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.textContent?.substring(0, 30) || '');\n"
+        "  for (let i = 0; i < count; i++) {\n"
+        "    const box = allBoxes.nth(i);\n"
+        "    // Use evaluate to get the accessible name from the DOM\n"
+        "    const acc = await box.evaluate(el => el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.accessibleName || '');\n"
+        "    const accL = acc.toLowerCase();\n"
+        "    if (accL.includes('lyric') || accL.includes('write some') || accL.includes('prompt')) continue;\n"
+        "    if (accL.includes('title')) continue;\n"
+        "    if (accL.includes('search') || accL.includes('page') || accL.includes('enhance') || accL.includes('workspace')) continue;\n"
+        "    // This must be the Styles box\n"
+        "    stylesBox = box;\n"
+        "    break;\n"
+        "  }\n"
+        "\n"
+        "  // Fill Lyrics first (fill() works with multi-line content)\n"
+        "  await lyricsBox.fill(lyrics);\n"
+        "\n"
+        "  // Fill Title\n"
+        "  await titleBox.fill(title);\n"
+        "\n"
+        "  // Fill Styles — click + select all + type to trigger React state reliably\n"
+        "  if (stylesBox) {\n"
+        "    await stylesBox.click();\n"
+        "    await page.keyboard.press('Meta+a');\n"
+        "    await page.keyboard.press('Backspace');\n"
+        "    await page.keyboard.insertText(tags);\n"
+        "  }\n"
+        "\n"
+        "  // Handle Instrumental toggle\n"
+        "  const toggle = page.getByRole('button', { name: /Instrumental/i }).first();\n"
+        "  if (await toggle.count() > 0) {\n"
+        "    const pressed = await toggle.getAttribute('aria-pressed');\n"
+        "    const isOn = pressed === 'true';\n"
+        "    if (isInstrumental !== isOn) await toggle.click();\n"
+        "  }\n"
+        "\n"
+        "  return 'Form filled: ' + title;\n"
+        "}"
+    )
+
+    output = pw("run-code", js, timeout=30)
+    if "Could not find" in output:
+        print(f"  WARN: {output}", file=sys.stderr)
+    return output
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fill the Suno form from prompts_data.json (browser must already be open)"
+    )
+    parser.add_argument(
+        "--index", type=int, default=0,
+        help="Prompt index to fill (0-based, default: 0)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Print what would be filled without touching the browser"
+    )
+    parser.add_argument(
+        "--prompts-file", type=str, default=None,
+        help="Path to prompts JSON file (default: prompts_data.json)"
+    )
+    args = parser.parse_args()
+
+    prompts_file = Path(args.prompts_file) if args.prompts_file else PROMPTS_FILE
+    if not prompts_file.exists():
+        print(f"ERROR: {prompts_file} not found", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(prompts_file) as f:
+            prompts = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: {prompts_file} contains invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.index < 0 or args.index >= len(prompts):
+        print(f"ERROR: index {args.index} out of range (0-{len(prompts)-1})", file=sys.stderr)
+        sys.exit(1)
+
+    prompt = prompts[args.index]
+    title = prompt.get("invented_title", "(untitled)")
+    tags = prompt.get("tags", "")
+    lyrics = prompt.get("prompt", "")
+    instrumental = prompt.get("make_instrumental", False)
+
+    print(f"Prompt [{args.index}]: {title}")
+    print(f"  Tags:         {tags[:80]}{'...' if len(tags) > 80 else ''}")
+    print(f"  Lyrics:       {len(lyrics)} chars, {lyrics.count(chr(10))+1 if lyrics else 0} lines")
+    print(f"  Instrumental: {instrumental}")
+
+    if args.dry_run:
+        print("\n--dry-run: no browser action taken")
+        return
+
+    print(f"  Filling form...")
+    output = fill_form(prompt)
+    print(f"  Done.")
+
+
+if __name__ == "__main__":
+    main()

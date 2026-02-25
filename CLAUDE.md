@@ -57,6 +57,25 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Artist name on all generated metadata: **"Refrakt"**
   - First refraction: "Glass Cradle" (refracted from "Retrovertigo" by Mr. Bungle, Rocket playlist)
 
+- Vocal character capture in Perplexity research
+  - `research_track()` query now explicitly asks for singer's gender, range, tone, delivery, and distinctive traits
+  - Tags left empty by `bin/refrakt` — delegated to suno-prompt agent for richer vocal-aware generation
+- `docs/suno-vocal-prompting.md` — Suno vocal prompting research guide
+  - Vocal descriptor taxonomy (gender, range, texture, delivery, emotional quality)
+  - Tag placement strategy (Style Tags for global voice, Lyrics metatags for section changes)
+  - Negative tags for gender control, reliable community-tested combos, known limitations
+- `.claude/agents/suno-prompt.md` — Haiku agent for tag generation with vocal character
+  - Reads research + vocal prompting guide → writes optimized `tags` and `negative_tags`
+  - Vocal descriptors placed early in tag string for higher Suno weight
+  - Pipeline: `bin/refrakt` → Refrakt agent (lyrics) → suno-prompt agent (tags) → `/suno-generate`
+- `bin/suno-fill-form` — form fill helper for Suno browser automation
+  - Reads `prompts_data.json`, fills Styles/Title/Lyrics/Instrumental via `playwright-cli run-code`
+  - Uses `getByRole('textbox', {name: /pattern/})` — Suno's React components don't have HTML placeholder attributes, so CSS selectors fail. Role-based selectors read from the accessibility tree.
+  - Styles field identified by exclusion (rotating placeholder text doesn't match any fixed pattern)
+  - `fill()` works for Lyrics/Title; Styles needs `click + Cmd+A + Backspace + insertText` for React state
+  - Bypasses shell escaping issues with multi-line lyrics — `json.dumps()` embeds content as JS string literals
+  - Claude still handles browser open/cookies/mode switch/captcha/create click interactively
+
 ### In Progress / Next Steps
 - (none currently)
 
@@ -261,6 +280,11 @@ bin/fetch-playlist                       # Step 1a: fetch Spotify playlist data
 bin/enrich-genres                        # Step 1b: enrich with Last.fm genre tags
 bin/generate-prompts --count 10          # Step 2a: research tracks + generate rich prompts (instrumental)
 bin/refrakt --playlist "Rocket" --track "Name"  # Step 2b: Refrakt — vocal refraction from any playlist
+
+# Browser form fill (used during /suno-generate Phase 3)
+bin/suno-fill-form                       # fill form from prompts_data.json (index 0)
+bin/suno-fill-form --index 1             # fill specific prompt
+bin/suno-fill-form --dry-run             # preview without browser
 
 # Suno operations
 bin/suno auth                            # verify session and show user/credit info

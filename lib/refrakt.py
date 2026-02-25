@@ -29,10 +29,15 @@ from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
+# Ensure lib/ is on sys.path so sibling module imports resolve regardless of invocation path
+_LIB_DIR = Path(__file__).parent
+if str(_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_LIB_DIR))
+
 from genius import fetch_lyrics
 from perplexity import ask as perplexity_ask
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = _LIB_DIR.parent
 load_dotenv(BASE_DIR / ".env")
 
 PROMPTS_FILE = BASE_DIR / "prompts_data.json"
@@ -155,8 +160,11 @@ def load_research_cache():
 
 
 def save_research_cache(cache):
-    with open(RESEARCH_CACHE_FILE, "w") as f:
-        json.dump(cache, f, indent=2, ensure_ascii=False)
+    try:
+        with open(RESEARCH_CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+    except OSError as e:
+        print(f"WARNING: Could not write research cache: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -174,8 +182,13 @@ def research_track(track_name, artists, cache):
         f"Describe the musical style, sonic character, instrumentation, mood, "
         f"tempo, and production aesthetics of '{track_name}' by {artist_str}. "
         f"Also describe the lyrical themes, emotional arc, and subject matter. "
+        f"Describe the singer's vocal characteristics in detail: gender, vocal range "
+        f"(bass/baritone/tenor/alto/soprano), tone quality (raspy, smooth, breathy, "
+        f"gravelly, clear, etc.), delivery style (belting, crooning, falsetto, etc.), "
+        f"and any distinctive vocal traits. "
         f"Focus on: specific instruments and sounds, production techniques, "
-        f"tempo/BPM, emotional mood, sonic textures, and what the lyrics are about. "
+        f"tempo/BPM, emotional mood, sonic textures, vocal character, "
+        f"and what the lyrics are about. "
         f"Be specific about sound design, not just genre labels. "
         f"Keep it under 250 words."
     )
@@ -189,37 +202,6 @@ def research_track(track_name, artists, cache):
     }
     save_research_cache(cache)
     return research
-
-
-def synthesize_tags(research, duration_ms):
-    if duration_ms < 180_000:
-        bpm_hint = "~130 BPM"
-    elif duration_ms < 300_000:
-        bpm_hint = "~100 BPM"
-    elif duration_ms < 480_000:
-        bpm_hint = "~75 BPM"
-    else:
-        bpm_hint = "~60 BPM"
-
-    query = (
-        f"Given this description of a track:\n\n{research}\n\n"
-        f"Write a Suno AI style prompt (120-200 characters) that captures "
-        f"the sonic character. Include: 2-3 genre anchors, specific sonic textures, "
-        f"mood/atmosphere descriptors, {bpm_hint}. Do NOT include 'instrumental' — "
-        f"this song has vocals. Use descriptive phrases not just genre labels.\n\n"
-        f"Example: 'art rock, chamber pop, hypnotic cyclical dissonance, "
-        f"glockenspiel clashes, sparse moody intimacy, anthemic vocals, 100 BPM'\n\n"
-        f"Return ONLY the tag string, nothing else. No quotes, no explanation."
-    )
-
-    print(f"    Synthesizing tags via Perplexity...")
-    tags = perplexity_ask(query)
-
-    tags = tags.strip().strip('"').strip("'")
-    if "\n" in tags:
-        tags = tags.split("\n")[0].strip()
-
-    return tags
 
 
 # ---------------------------------------------------------------------------
@@ -261,21 +243,29 @@ def main():
 
     # Connect to Spotify
     print(f"Connecting to Spotify...")
-    sp = get_spotify_client()
-    user = sp.current_user()
+    try:
+        sp = get_spotify_client()
+        user = sp.current_user()
+    except Exception as e:
+        sys.exit(f"ERROR: Spotify connection failed: {e}")
     print(f"Logged in as: {user['display_name']}")
 
     # Find playlist
     print(f"Looking for playlist: '{args.playlist}'...")
-    playlist = find_playlist(sp, args.playlist)
+    try:
+        playlist = find_playlist(sp, args.playlist)
+    except Exception as e:
+        sys.exit(f"ERROR: Spotify API call failed: {e}")
     if not playlist:
-        print(f"ERROR: Could not find playlist '{args.playlist}'")
-        sys.exit(1)
+        sys.exit(f"ERROR: Could not find playlist '{args.playlist}'")
     print(f"Found: '{playlist['name']}' ({playlist['id']})")
 
     # Fetch tracks
     print(f"Fetching tracks...")
-    tracks = get_playlist_tracks(sp, playlist["id"], limit=500)
+    try:
+        tracks = get_playlist_tracks(sp, playlist["id"], limit=500)
+    except Exception as e:
+        sys.exit(f"ERROR: Failed to fetch tracks: {e}")
     print(f"  {len(tracks)} tracks loaded")
 
     # List mode
@@ -291,16 +281,14 @@ def main():
         search = args.track.lower()
         matches = [t for t in tracks if search in t["name"].lower()]
         if not matches:
-            print(f"ERROR: No track matching '{args.track}' found")
-            sys.exit(1)
+            sys.exit(f"ERROR: No track matching '{args.track}' found")
         track = matches[0]
         if len(matches) > 1:
             print(f"  Multiple matches, using first: '{track['name']}'")
     elif args.index is not None:
         idx = args.index - 1
         if idx < 0 or idx >= len(tracks):
-            print(f"ERROR: Index {args.index} out of range (1-{len(tracks)})")
-            sys.exit(1)
+            sys.exit(f"ERROR: Index {args.index} out of range (1-{len(tracks)})")
         track = tracks[idx]
     else:  # --random
         track = rng.choice(tracks)
@@ -330,9 +318,9 @@ def main():
         print(f"    Research: fetched")
         time.sleep(API_DELAY)
 
-    # Synthesize tags
-    tags = synthesize_tags(research, duration_ms)
-    time.sleep(API_DELAY)
+    # Tags left empty — the suno-prompt agent handles tag generation
+    # with access to the vocal prompting guide for richer vocal descriptors
+    tags = ""
 
     # Invent title
     title = invent_title(rng)
@@ -354,8 +342,11 @@ def main():
         "research": research,
     }]
 
-    with open(PROMPTS_FILE, "w") as f:
-        json.dump(prompt, f, indent=2, ensure_ascii=False)
+    try:
+        with open(PROMPTS_FILE, "w") as f:
+            json.dump(prompt, f, indent=2, ensure_ascii=False)
+    except OSError as e:
+        sys.exit(f"ERROR: Could not write {PROMPTS_FILE}: {e}")
 
     print(f"\n{'='*60}")
     print(f"  REFRAKT")

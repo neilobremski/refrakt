@@ -41,7 +41,11 @@ def fetch_lyrics(track_name: str, artist: str) -> str | None:
     genius = lyricsgenius.Genius(token, verbose=False, remove_section_headers=False)
     genius.excluded_terms = ["(Remix)", "(Live)"]
 
-    song = genius.search_song(track_name, artist)
+    try:
+        song = genius.search_song(track_name, artist)
+    except Exception as e:
+        print(f"WARNING: Genius API error for '{track_name}': {e}", file=sys.stderr)
+        return None
     if song and song.lyrics:
         return song.lyrics.strip()
     return None

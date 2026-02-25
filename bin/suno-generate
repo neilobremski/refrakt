@@ -8,6 +8,7 @@ for generation, and downloads the results.
 
 Usage:
     bin/suno-generate [--count N] [--seed SEED] [--no-download]
+    bin/suno-generate --prompts-file prompts_data.json [--no-download]
 """
 
 import argparse
@@ -167,8 +168,8 @@ def inject_cookies(session: dict):
         "--httpOnly",
     )
 
-    print("  Cookies injected. Reloading page...")
-    pw("reload")
+    print("  Cookies injected. Navigating to /create...")
+    pw("goto", SUNO_CREATE_URL)
     time.sleep(BROWSER_SETTLE)
 
 
@@ -278,15 +279,37 @@ def wait_for_captcha_solve():
     raise TimeoutError("Captcha not solved within timeout")
 
 
+def find_lyrics_ref(snapshot: str) -> str | None:
+    """Find the lyrics/prompt textbox ref."""
+    patterns = [
+        r'textbox.*[Ll]yrics',
+        r'textbox.*[Pp]rompt',
+        r'textbox.*[Ww]rite.*lyrics',
+        r'textbox.*[Ww]rite.*song',
+        r'[Ll]yrics.*textbox',
+    ]
+    for pat in patterns:
+        ref = find_ref(snapshot, pat)
+        if ref:
+            return ref
+    return None
+
+
 def fill_and_submit(prompt: dict, index: int, total: int):
     """Fill the Suno form for one prompt and click Create."""
     title = prompt["invented_title"]
     tags = prompt["tags"]
-    source = prompt["source_track_name"]
+    source = prompt.get("source_track_name", "unknown")
+    lyrics = prompt.get("prompt", "")
+    make_instrumental = prompt.get("make_instrumental", True)
 
     print(f"\n--- [{index}/{total}] {title} ---")
     print(f"  Source: {source}")
     print(f"  Tags:  {tags}")
+    print(f"  Instrumental: {make_instrumental}")
+    if lyrics:
+        preview = lyrics[:80].replace("\n", " ")
+        print(f"  Lyrics: {preview}{'...' if len(lyrics) > 80 else ''}")
 
     # Fresh snapshot
     snap = pw_snapshot()
@@ -325,14 +348,31 @@ def fill_and_submit(prompt: dict, index: int, total: int):
     pw("fill", title_ref, title)
     time.sleep(1)
 
-    # Ensure instrumental is checked — look for an instrumental toggle/checkbox
+    # Fill lyrics if present
+    if lyrics:
+        snap_for_lyrics = pw_snapshot()
+        lyrics_ref = find_lyrics_ref(snap_for_lyrics)
+        if lyrics_ref:
+            print(f"  Filling lyrics (ref={lyrics_ref})...")
+            pw("fill", lyrics_ref, lyrics)
+            time.sleep(1)
+        else:
+            print("  WARNING: Could not find lyrics textbox. Lyrics will be skipped.")
+            pw_screenshot(f"debug-no-lyrics-{index}.png")
+
+    # Handle instrumental toggle
     snap2 = pw_snapshot()
     instrumental_ref = find_ref(snap2, r'(?:checkbox|switch|toggle).*[Ii]nstrumental')
     if instrumental_ref:
-        # Check if it's already checked
         line_match = [l for l in snap2.splitlines() if instrumental_ref in l]
-        if line_match and not re.search(r'checked|pressed|on', line_match[0], re.IGNORECASE):
-            print(f"  Toggling instrumental (ref={instrumental_ref})...")
+        is_checked = bool(line_match and re.search(r'checked|pressed|on', line_match[0], re.IGNORECASE))
+
+        if make_instrumental and not is_checked:
+            print(f"  Enabling instrumental (ref={instrumental_ref})...")
+            pw("click", instrumental_ref)
+            time.sleep(1)
+        elif not make_instrumental and is_checked:
+            print(f"  Disabling instrumental (ref={instrumental_ref})...")
             pw("click", instrumental_ref)
             time.sleep(1)
 
@@ -448,11 +488,30 @@ def main():
         "--no-download", action="store_true",
         help="Skip downloading after generation (just submit and poll)"
     )
+    parser.add_argument(
+        "--prompts-file", type=str, default=None,
+        help="Load prompts from a JSON file instead of generating them (e.g. prompts_data.json)"
+    )
     args = parser.parse_args()
 
-    # --- 1. Generate prompts -----------------------------------------------
-    print("\n=== Generating prompts ===\n")
-    prompts = generate_prompts(args.count, args.seed)
+    # --- 1. Generate or load prompts ---------------------------------------
+    if args.prompts_file:
+        print(f"\n=== Loading prompts from {args.prompts_file} ===\n")
+        prompts_path = Path(args.prompts_file)
+        if not prompts_path.is_absolute():
+            prompts_path = PROJECT_ROOT / prompts_path
+        if not prompts_path.exists():
+            sys.exit(f"ERROR: {prompts_path} not found.")
+        with open(prompts_path, "r") as f:
+            prompts = json.load(f)
+        if not isinstance(prompts, list):
+            prompts = [prompts]
+        print(f"  Loaded {len(prompts)} prompt(s) from file.")
+        for p in prompts:
+            print(f"  {p.get('invented_title', '?')}  [instrumental={p.get('make_instrumental', True)}]")
+    else:
+        print("\n=== Generating prompts ===\n")
+        prompts = generate_prompts(args.count, args.seed)
     if not prompts:
         print("No prompts generated. Exiting.")
         return
@@ -533,13 +592,16 @@ def main():
             print("  Use 'bin/suno poll <id> --wait' to retry later.")
 
     # --- 6. Update generated_tracks.json -----------------------------------
-    print("\n=== Updating generated tracks ===\n")
-    generated = load_generated()
-    for prompt in submitted:
-        generated.add(prompt["source_track_id"])
-    save_generated(generated)
-    print(f"  Marked {len(submitted)} source track(s) as generated.")
-    print(f"  Total generated: {len(generated)}")
+    # Only update when using the internal prompt generation flow (not --prompts-file)
+    ids_to_mark = [p["source_track_id"] for p in submitted if "source_track_id" in p]
+    if ids_to_mark:
+        print("\n=== Updating generated tracks ===\n")
+        generated = load_generated()
+        for track_id in ids_to_mark:
+            generated.add(track_id)
+        save_generated(generated)
+        print(f"  Marked {len(ids_to_mark)} source track(s) as generated.")
+        print(f"  Total generated: {len(generated)}")
 
     print("\nDone.")
 
