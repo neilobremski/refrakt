@@ -1,17 +1,27 @@
 # Refrakt
 
-An automated pipeline that reads a Spotify playlist, analyzes each track's musical DNA, and uses that data to generate and download original instrumental music via Suno AI.
+Original songs refracted from existing ones. An automated pipeline that analyzes tracks from Spotify playlists, researches their musical character via Perplexity AI, and generates original music through Suno AI — both instrumentals and vocal tracks with newly written lyrics.
 
 ## What It Does
 
-1. **Fetch playlist** — Pulls all tracks from a named Spotify playlist (track metadata only — audio features and genres are no longer available without Spotify Extended Quota)
-   1a. **Enrich genres** — Queries Last.fm `artist.getTopTags` for each unique artist to add genre tags to every track
-2. **Generate prompts** — Maps each track's audio characteristics to a Suno AI style prompt with invented titles
-3. **Generate music** — Submits prompts to Suno AI via headed browser automation, polls for completion
-4. **Download audio** — Saves generated clips as `.m4a` (Opus ~143kbps) with timestamp-prefixed filenames
-5. **Tag files** — Writes ID3 metadata (title, album art, etc.) to downloaded files (planned)
+### Instrumental pipeline (Wordless Work)
 
-The target playlist is **"Wordless Work"** — a curated collection of instrumental and ambient tracks. The goal is to generate a set of original Suno-composed instrumentals that capture a similar mood and feel.
+1. **Fetch playlist** — Pulls tracks from a Spotify playlist
+2. **Enrich genres** — Queries Last.fm `artist.getTopTags` for genre tags
+3. **Research + generate prompts** — Uses Perplexity AI to research each track's sonic character, then synthesizes rich Suno style tags (120-200 chars with textures, mood, BPM) and structural metatags
+4. **Generate music** — Submits prompts to Suno AI via headed browser automation, polls for completion
+5. **Download + tag** — Saves clips as `.m4a` (Opus ~143kbps) and writes metadata (title, artist, genre, cover art)
+
+### Vocal refraction pipeline (Refrakt)
+
+1. **Pick a track** from any Spotify playlist
+2. **Fetch original lyrics** from Genius
+3. **Research** the track's musical character via Perplexity AI
+4. **Generate style tags** — same Perplexity-powered synthesis as instrumentals
+5. **Write refracted lyrics** — an AI agent (Haiku) reads the original lyrics and writes completely new ones that capture the same spirit with fresh imagery
+6. **Generate + download + tag** — same Suno submission pipeline as above
+
+All generated metadata is credited to artist **"Refrakt"**.
 
 ## Project Structure
 
@@ -19,38 +29,45 @@ The target playlist is **"Wordless Work"** — a curated collection of instrumen
 Refrakt/
 ├── bin/                        # CLI entry points (executable, no .py extension)
 │   ├── suno-generate           # Full pipeline: prompts -> browser -> poll -> download
+│   ├── refrakt                 # Vocal refraction pipeline
 │   ├── fetch-playlist          # Fetch Spotify playlist data
 │   ├── enrich-genres           # Enrich tracks with Last.fm genre tags
-│   ├── generate-prompts        # Generate Suno prompts from enriched data
+│   ├── generate-prompts        # Research tracks + generate rich prompts
 │   ├── suno                    # Suno CLI: auth, credits, feed, poll, download
+│   ├── suno-tag                # M4A metadata tagging
 │   └── download-tracks         # Standalone clip downloader
 ├── lib/
 │   ├── suno.py                 # Suno API library (auth, feed, poll, download)
-│   ├── generate_prompts.py     # Prompt generation library (titles, tags, tracking)
-│   ├── fetch_playlist.py       # Spotify playlist fetch library
-│   ├── enrich_genres.py        # Last.fm genre enrichment library
-│   └── download_tracks.py      # Standalone download library
-├── .env                        # Spotify + Last.fm credentials (gitignored)
-├── .gitignore
-├── .venv/                      # Python virtual environment (gitignored)
-├── .suno_session.json          # Suno auth tokens (gitignored)
-├── .lastfm_cache.json          # Last.fm tag cache (gitignored, auto-created)
+│   ├── generate_prompts.py     # Perplexity research + prompt synthesis
+│   ├── refrakt.py              # Vocal refraction pipeline
+│   ├── perplexity.py           # Perplexity AI REST client
+│   ├── genius.py               # Genius lyrics fetcher
+│   ├── fetch_playlist.py       # Spotify playlist fetch
+│   ├── enrich_genres.py        # Last.fm genre enrichment
+│   ├── tag_tracks.py           # M4A metadata tagging (mutagen)
+│   └── download_tracks.py      # Audio download utility
 ├── .claude/
-│   └── skills/                 # Claude Code skills (SKILL.md frontmatter pattern)
+│   ├── agents/
+│   │   └── refrakt.md          # Haiku agent for lyric refraction
+│   ├── settings.json           # Claude Code permissions and hooks
+│   └── skills/                 # Claude Code skills (SKILL.md frontmatter)
 │       ├── suno-generate/
 │       ├── fetch-playlist/
 │       ├── enrich/
 │       ├── generate-prompts/
 │       ├── suno-status/
-│       └── suno-download/
-├── playlist_data.json          # Track data, updated by enrich_genres.py (gitignored)
-├── generated_tracks.json       # Tracks which source tracks have been submitted
-├── output/                     # Downloaded audio — .m4a preferred (gitignored)
-└── docs/
-    ├── spotify-api-setup.md
-    ├── spotify-api-research.md
-    ├── suno-api-research.md
-    └── images/
+│       ├── suno-download/
+│       └── suno-tag/
+├── docs/
+│   ├── spotify-api-setup.md
+│   ├── spotify-api-research.md
+│   ├── suno-api-research.md
+│   └── lastfm-api-setup.md
+├── requirements.txt
+├── .gitignore
+├── .env                        # API credentials (gitignored)
+├── .suno_session.json          # Suno auth tokens (gitignored)
+└── output/                     # Downloaded audio (gitignored)
 ```
 
 ## Setup
@@ -58,10 +75,11 @@ Refrakt/
 ### Prerequisites
 
 - Python 3.10+
-- A Spotify account
 - A Spotify Developer App (see [docs/spotify-api-setup.md](docs/spotify-api-setup.md))
-- A Last.fm API key (free — register at https://www.last.fm/api/account/create)
-- A Suno account (for generation step)
+- A Last.fm API key (free — [register here](https://www.last.fm/api/account/create))
+- A Perplexity API key (for track research — [perplexity.ai](https://www.perplexity.ai))
+- A Genius API token (for lyrics — [genius.com/api-clients](https://genius.com/api-clients))
+- A Suno account (for generation)
 - `playwright-cli` installed (for browser automation)
 
 ### Install dependencies
@@ -80,28 +98,36 @@ SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
 LASTFM_API_KEY=your_lastfm_api_key
+PERPLEXITY_API_KEY=your_perplexity_api_key
+GENIUS_ACCESS_TOKEN=your_genius_token
 ```
-
-See [docs/spotify-api-setup.md](docs/spotify-api-setup.md) for how to create a Spotify Developer App and obtain these credentials.
 
 ## Usage
 
-### Full pipeline (recommended)
+### Instrumental generation (end-to-end)
 
 ```bash
-bin/suno-generate --count 2              # generate 2 songs end-to-end
+bin/suno-generate --count 2              # generate 2 songs
 bin/suno-generate --count 5 --seed 42    # reproducible batch of 5
 bin/suno-generate --count 1 --no-download  # submit only, download later
 ```
 
-This runs the entire pipeline: selects un-generated tracks, generates prompts with invented titles, opens a headed browser, fills the Suno form, submits, polls for completion, and downloads results.
-
-### Individual steps
+### Vocal refraction (Refrakt)
 
 ```bash
-bin/fetch-playlist               # Step 1a: fetch Spotify playlist data
-bin/enrich-genres                # Step 1b: enrich with Last.fm genre tags
-bin/generate-prompts --count 10  # Step 2: generate prompt data
+bin/refrakt --playlist "Rocket" --track "Retrovertigo"   # specific track
+bin/refrakt --playlist "Rocket" --random                  # random track
+bin/refrakt --playlist "Rocket" --list                    # browse tracks
+```
+
+After `bin/refrakt` generates the prompt data, spawn the Refrakt agent to write lyrics, then run `/suno-generate` to submit.
+
+### Individual pipeline steps
+
+```bash
+bin/fetch-playlist               # Fetch Spotify playlist data
+bin/enrich-genres                # Enrich with Last.fm genre tags
+bin/generate-prompts --count 10  # Research tracks + generate prompts
 ```
 
 ### Suno operations
@@ -114,29 +140,43 @@ bin/suno poll <id> --wait        # Poll clip status until complete
 bin/suno download <id>...        # Download completed clips as .m4a
 ```
 
-On first Spotify run, a browser window will open for login. If it redirects to an `https://localhost` page with an SSL error, copy the full URL from the address bar and paste it back into the terminal.
+### Metadata tagging
 
-## Download filename format
+```bash
+bin/suno-tag --all               # Tag all .m4a files in output/
+bin/suno-tag --all --dry-run     # Preview without writing
+bin/suno-tag <clip_id> ...       # Tag specific clips
+```
 
-All downloads use the pattern: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
+## How It Works
 
-Example: `20260224195700_Glass_Circuit__60a3426d.m4a`
+### Title invention
 
-## Spotify OAuth Note
+Generated song titles are never derived from the original track name (to avoid Suno guard rails). Titles are invented to evoke a similar mood.
 
-This project uses the Authorization Code flow. Spotify credentials are stored in `.cache` after first login — you won't need to log in again on subsequent runs unless the token expires.
+Example: "Retrovertigo" by Mr. Bungle -> "Glass Cradle"
+
+### Perplexity-powered research
+
+Each track is researched via Perplexity AI (sonar-pro model) to understand its sonic character — instrumentation, production style, tempo, mood, and cultural context. This research is synthesized into rich, descriptive Suno style tags rather than simple genre labels.
+
+### Download format
+
+All downloads use `.m4a` (Opus ~143kbps) over `.mp3` (64kbps) for higher quality.
+
+Filename pattern: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
 
 ## Status
 
 | Step | Status |
 |------|--------|
-| 1a. Fetch Spotify playlist data | Working |
-| 1b. Enrich tracks with Last.fm genre tags | Working |
-| 2. Generate Suno prompts from track data + genres | Working |
-| 3. Full generation loop (browser automation + poll + download) | Working |
-| 4. Download completed clips (.m4a Opus ~143kbps) | Working |
-| 5. Tag files with metadata | Planned |
+| Fetch Spotify playlist data | Working |
+| Enrich tracks with Last.fm genre tags | Working |
+| Perplexity research + prompt generation | Working |
+| Vocal refraction (Refrakt pipeline) | Working |
+| Browser automation + poll + download | Working |
+| M4A metadata tagging (title, art, genre) | Working |
 
 ## Suno API
 
-Suno does not have an official public API. Generation uses reverse-engineered session cookie auth with hCaptcha as the main barrier. The pipeline uses `playwright-cli --headed --persistent` with a persistent browser profile — the invisible hCaptcha auto-passes without visual challenges. See `docs/suno-api-research.md` for full details.
+Suno does not have an official public API. Generation uses reverse-engineered session cookie auth with hCaptcha as the main barrier. The pipeline uses `playwright-cli --headed --persistent` with a project-local browser profile — the invisible hCaptcha auto-passes without visual challenges. See [docs/suno-api-research.md](docs/suno-api-research.md) for full details.
