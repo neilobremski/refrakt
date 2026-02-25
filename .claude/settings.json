@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(playwright-cli *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(bin/*)",
+      "Bash(bin/refrakt *)",
+      "Bash(bin/generate-prompts *)",
+      "Bash(bin/suno-generate *)",
+      "Bash(bin/suno *)",
+      "Bash(bin/suno-tag *)",
+      "Bash(bin/fetch-playlist *)",
+      "Bash(bin/enrich-genres *)",
+      "Bash(bin/download-tracks *)",
+      "Bash(refrakt *)",
+      "Bash(generate-prompts *)",
+      "Bash(suno-generate *)",
+      "Bash(suno *)",
+      "Bash(suno-tag *)",
+      "Bash(fetch-playlist *)",
+      "Bash(enrich-genres *)",
+      "Bash(download-tracks *)",
+      "Fetch(*)",
+      "WebFetch",
+      "WebFetch(*)",
+      "WebFetch(domain:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'export PATH=\"'\"${CLAUDE_PROJECT_DIR}\"'/bin:$PATH\"' >> \"$CLAUDE_ENV_FILE\""
+          }
+        ]
+      }
+    ]
+  }
+}

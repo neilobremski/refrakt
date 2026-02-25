@@ -1,0 +1,17 @@
+.env
+.cache
+.lastfm_cache.json
+.suno_session.json
+.venv/
+__pycache__/
+*.pyc
+output/
+playlist_data.json
+prompts_data.json
+generated_tracks.json
+*.png
+.DS_Store
+.prompt_research_cache.json
+.playwright-cli/
+.playwright-profile/
+.claude/settings.local.json

@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""
+suno-generate — Full Suno generation loop.
+
+Generates prompts from enriched playlist data, opens a persistent headed
+browser, fills the Suno custom-mode form for each prompt, submits, waits
+for generation, and downloads the results.
+
+Usage:
+    bin/suno-generate [--count N] [--seed SEED] [--no-download]
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Project root and venv bootstrap
+# ---------------------------------------------------------------------------
+
+import site
+import glob as _glob
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_sp = _glob.glob(str(PROJECT_ROOT / ".venv/lib/python*/site-packages"))
+if _sp:
+    site.addsitedir(_sp[0])
+sys.path.insert(0, str(PROJECT_ROOT / "lib"))
+
+from generate_prompts import (
+    PLAYLIST_FILE,
+    GENERATED_FILE,
+    invent_title,
+    build_tags,
+    load_generated,
+    save_generated,
+)
+from suno import (
+    load_session,
+    refresh_jwt,
+    get_feed,
+    wait_for_completion,
+    download_file,
+    sanitize_filename,
+    CDN_BASE,
+    OUTPUT_DIR,
+)
+
+import random
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+SUNO_CREATE_URL = "https://suno.com/create"
+PROFILE_DIR = str(PROJECT_ROOT / ".playwright-profile")
+POLL_INTERVAL = 5
+CAPTCHA_TIMEOUT = 300  # 5 minutes
+GENERATION_WAIT = 12   # seconds between Create clicks
+BROWSER_SETTLE = 5     # seconds to wait after browser actions
+
+
+# ---------------------------------------------------------------------------
+# Playwright-cli helpers
+# ---------------------------------------------------------------------------
+
+def pw(*args: str, timeout: int = 30) -> str:
+    """Run a playwright-cli command and return stdout."""
+    cmd = ["playwright-cli"] + list(args)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        raise RuntimeError(f"playwright-cli {' '.join(args)} failed: {stderr}")
+    return result.stdout
+
+
+def pw_snapshot() -> str:
+    """Take a page snapshot and return the text."""
+    return pw("snapshot")
+
+
+def pw_screenshot(filename: str = "suno-generate-debug.png") -> str:
+    """Take a screenshot for debugging."""
+    path = str(PROJECT_ROOT / filename)
+    return pw("screenshot", f"--filename={path}")
+
+
+def find_ref(snapshot: str, pattern: str) -> str | None:
+    """
+    Search a snapshot for a line matching `pattern` (case-insensitive)
+    and extract the [ref=XXXX] reference.
+
+    Returns the ref string (e.g., 'e138') or None.
+    """
+    for line in snapshot.splitlines():
+        if re.search(pattern, line, re.IGNORECASE):
+            m = re.search(r'\[ref=(\w+)\]', line)
+            if m:
+                return m.group(1)
+    return None
+
+
+def find_all_refs(snapshot: str, pattern: str) -> list[tuple[str, str]]:
+    """
+    Find all lines matching pattern, return list of (ref, line) tuples.
+    """
+    results = []
+    for line in snapshot.splitlines():
+        if re.search(pattern, line, re.IGNORECASE):
+            m = re.search(r'\[ref=(\w+)\]', line)
+            if m:
+                results.append((m.group(1), line.strip()))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Browser automation
+# ---------------------------------------------------------------------------
+
+def open_browser():
+    """Open a persistent headed Chrome to Suno's create page."""
+    print("Opening browser...")
+    pw("open", "--headed", "--persistent", f"--profile={PROFILE_DIR}", SUNO_CREATE_URL, timeout=60)
+    time.sleep(BROWSER_SETTLE)
+    print("  Browser open.")
+
+
+def close_browser():
+    """Close the browser session."""
+    try:
+        pw("close")
+        print("Browser closed.")
+    except Exception as e:
+        print(f"  Warning: could not close browser cleanly: {e}")
+
+
+def inject_cookies(session: dict):
+    """Set Suno session cookies in the browser."""
+    print("Injecting session cookies...")
+
+    # __client cookie for Clerk auth
+    pw(
+        "cookie-set", "__client", session["client_token"],
+        "--domain=.suno.com",
+        "--path=/",
+        "--secure",
+        "--httpOnly",
+    )
+
+    # Django session cookie
+    pw(
+        "cookie-set", "sessionid", session["django_session_id"],
+        "--domain=.suno.com",
+        "--path=/",
+        "--secure",
+        "--httpOnly",
+    )
+
+    print("  Cookies injected. Reloading page...")
+    pw("reload")
+    time.sleep(BROWSER_SETTLE)
+
+
+def ensure_custom_mode(snapshot: str) -> str:
+    """
+    Make sure the create page is in Custom mode.
+    Takes a snapshot, clicks Custom if needed, returns a fresh snapshot.
+    """
+    # Look for the Custom button/tab
+    ref = find_ref(snapshot, r'button.*"Custom"')
+    if not ref:
+        ref = find_ref(snapshot, r'"Custom"')
+    if ref:
+        pw("click", ref)
+        time.sleep(2)
+        return pw_snapshot()
+    # Already in custom mode or can't find button — return as-is
+    return snapshot
+
+
+def find_style_ref(snapshot: str) -> str | None:
+    """Find the style/tags textbox ref."""
+    # Suno rotates placeholder text; search for known patterns
+    style_patterns = [
+        r'textbox.*(?:Style|Tags)',
+        r'textbox.*(?:power chords|gritty flow|synth|pop|rock|jazz)',
+        r'(?:Style|Tags).*textbox',
+        r'textbox.*(?:Describe|style of music)',
+    ]
+    for pat in style_patterns:
+        ref = find_ref(snapshot, pat)
+        if ref:
+            return ref
+
+    # Fallback: find first textbox that isn't the title field
+    # (Title field usually has "Song Title" or "Title" in it)
+    refs = find_all_refs(snapshot, r'textbox')
+    for ref, line in refs:
+        if not re.search(r'(?:title|song title)', line, re.IGNORECASE):
+            return ref
+
+    return None
+
+
+def find_title_ref(snapshot: str) -> str | None:
+    """Find the song title textbox ref."""
+    patterns = [
+        r'textbox.*"Song Title',
+        r'textbox.*(?:Title)',
+        r'(?:Song Title|Title).*textbox',
+    ]
+    for pat in patterns:
+        ref = find_ref(snapshot, pat)
+        if ref:
+            return ref
+    return None
+
+
+def find_create_ref(snapshot: str) -> str | None:
+    """Find the Create/Generate button ref."""
+    patterns = [
+        r'button.*"Create"',
+        r'button.*"Create song"',
+        r'button.*"Generate"',
+        r'"Create".*button',
+        r'"Create song".*button',
+    ]
+    for pat in patterns:
+        ref = find_ref(snapshot, pat)
+        if ref:
+            return ref
+    return None
+
+
+def check_for_captcha(snapshot: str) -> bool:
+    """Check if a captcha challenge is visible in the snapshot."""
+    captcha_patterns = [
+        r"Select everything",
+        r"hCaptcha",
+        r"Challenge Image",
+        r"Verify Answers",
+        r"captcha",
+        r"Please verify",
+    ]
+    for pat in captcha_patterns:
+        if re.search(pat, snapshot, re.IGNORECASE):
+            return True
+    return False
+
+
+def wait_for_captcha_solve():
+    """If a captcha appeared, wait for the user to solve it manually."""
+    print("\n" + "=" * 60)
+    print("  CAPTCHA DETECTED — Please solve it in the browser window!")
+    print("=" * 60 + "\n")
+
+    deadline = time.time() + CAPTCHA_TIMEOUT
+    while time.time() < deadline:
+        time.sleep(POLL_INTERVAL)
+        snap = pw_snapshot()
+        if not check_for_captcha(snap):
+            print("  Captcha cleared. Continuing...")
+            return
+        remaining = int(deadline - time.time())
+        print(f"  [{remaining}s left] Still waiting for captcha solve...")
+
+    raise TimeoutError("Captcha not solved within timeout")
+
+
+def fill_and_submit(prompt: dict, index: int, total: int):
+    """Fill the Suno form for one prompt and click Create."""
+    title = prompt["invented_title"]
+    tags = prompt["tags"]
+    source = prompt["source_track_name"]
+
+    print(f"\n--- [{index}/{total}] {title} ---")
+    print(f"  Source: {source}")
+    print(f"  Tags:  {tags}")
+
+    # Fresh snapshot
+    snap = pw_snapshot()
+
+    # Ensure Custom mode
+    snap = ensure_custom_mode(snap)
+
+    # Find style textbox
+    style_ref = find_style_ref(snap)
+    if not style_ref:
+        print("  ERROR: Could not find style textbox. Skipping.")
+        pw_screenshot(f"debug-no-style-{index}.png")
+        return False
+
+    # Find title textbox
+    title_ref = find_title_ref(snap)
+    if not title_ref:
+        print("  ERROR: Could not find title textbox. Skipping.")
+        pw_screenshot(f"debug-no-title-{index}.png")
+        return False
+
+    # Find Create button
+    create_ref = find_create_ref(snap)
+    if not create_ref:
+        print("  ERROR: Could not find Create button. Skipping.")
+        pw_screenshot(f"debug-no-create-{index}.png")
+        return False
+
+    # Clear and fill style tags
+    print(f"  Filling style tags (ref={style_ref})...")
+    pw("fill", style_ref, tags)
+    time.sleep(1)
+
+    # Clear and fill title
+    print(f"  Filling title (ref={title_ref})...")
+    pw("fill", title_ref, title)
+    time.sleep(1)
+
+    # Ensure instrumental is checked — look for an instrumental toggle/checkbox
+    snap2 = pw_snapshot()
+    instrumental_ref = find_ref(snap2, r'(?:checkbox|switch|toggle).*[Ii]nstrumental')
+    if instrumental_ref:
+        # Check if it's already checked
+        line_match = [l for l in snap2.splitlines() if instrumental_ref in l]
+        if line_match and not re.search(r'checked|pressed|on', line_match[0], re.IGNORECASE):
+            print(f"  Toggling instrumental (ref={instrumental_ref})...")
+            pw("click", instrumental_ref)
+            time.sleep(1)
+
+    # Click Create
+    print(f"  Clicking Create (ref={create_ref})...")
+    pw("click", create_ref)
+    time.sleep(3)
+
+    # Check for captcha
+    snap_after = pw_snapshot()
+    if check_for_captcha(snap_after):
+        wait_for_captcha_solve()
+
+    print(f"  Submitted. Waiting {GENERATION_WAIT}s before next...")
+    time.sleep(GENERATION_WAIT)
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Feed diffing and download
+# ---------------------------------------------------------------------------
+
+def snapshot_feed_ids(session: dict, jwt: str) -> set[str]:
+    """Get the set of clip IDs from the current feed."""
+    clips = get_feed(session, jwt, page=0)
+    return {clip["id"] for clip in clips}
+
+
+def download_clip(clip: dict):
+    """Download a single clip with timestamp prefix."""
+    clip_id = clip["id"]
+    title = clip.get("title", clip_id)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    safe_title = sanitize_filename(title)
+    filename = f"{timestamp}_{safe_title}__{clip_id[:8]}.m4a"
+    dest = os.path.join(OUTPUT_DIR, filename)
+    m4a_url = f"{CDN_BASE}/{clip_id}.m4a"
+
+    print(f"  Downloading: {title}")
+    print(f"    {m4a_url}")
+    print(f"    -> {dest}")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    size = download_file(m4a_url, dest)
+    print(f"    Done ({size // 1024} KB)")
+
+
+# ---------------------------------------------------------------------------
+# Prompt generation (thin wrapper around generate_prompts.py functions)
+# ---------------------------------------------------------------------------
+
+def generate_prompts(count: int, seed: int | None) -> list[dict]:
+    """Select tracks and build prompt dicts."""
+    if not PLAYLIST_FILE.exists():
+        sys.exit(f"ERROR: {PLAYLIST_FILE} not found. Run bin/fetch-playlist first.")
+
+    with open(PLAYLIST_FILE, "r") as f:
+        data = json.load(f)
+
+    tracks = data.get("tracks", [])
+    print(f"Loaded {len(tracks)} tracks from {PLAYLIST_FILE.name}")
+
+    generated = load_generated()
+    print(f"Already generated: {len(generated)} tracks")
+
+    available = [t for t in tracks if t["id"] not in generated]
+    print(f"Available for generation: {len(available)} tracks")
+
+    if not available:
+        print("All tracks have been generated!")
+        sys.exit(0)
+
+    count = min(count, len(available))
+    print(f"Selecting {count} tracks...")
+
+    rng = random.Random(seed)
+    selected = rng.sample(available, count)
+
+    prompts = []
+    for track in selected:
+        title = invent_title(rng)
+        tags = build_tags(track)
+        prompts.append({
+            "source_track_id": track["id"],
+            "source_track_name": track["name"],
+            "source_artists": track.get("artists", []),
+            "invented_title": title,
+            "tags": tags,
+            "make_instrumental": True,
+        })
+        print(f"  {track['name']} -> {title}")
+        print(f"    Tags: {tags}")
+
+    return prompts
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Full Suno generation loop: prompts -> browser -> poll -> download."
+    )
+    parser.add_argument(
+        "--count", type=int, default=2,
+        help="Number of songs to generate (default: 2)"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Random seed for reproducible prompt selection"
+    )
+    parser.add_argument(
+        "--no-download", action="store_true",
+        help="Skip downloading after generation (just submit and poll)"
+    )
+    args = parser.parse_args()
+
+    # --- 1. Generate prompts -----------------------------------------------
+    print("\n=== Generating prompts ===\n")
+    prompts = generate_prompts(args.count, args.seed)
+    if not prompts:
+        print("No prompts generated. Exiting.")
+        return
+
+    # --- 2. Snapshot feed before generation --------------------------------
+    print("\n=== Snapshotting current feed ===\n")
+    session = load_session()
+    jwt = refresh_jwt(session)
+    feed_before = snapshot_feed_ids(session, jwt)
+    print(f"  Feed has {len(feed_before)} clips before generation.")
+
+    # --- 3. Browser automation ---------------------------------------------
+    print("\n=== Opening browser ===\n")
+    submitted = []
+    try:
+        open_browser()
+        inject_cookies(session)
+
+        # Wait for page to fully load after cookie injection
+        time.sleep(BROWSER_SETTLE)
+
+        for i, prompt in enumerate(prompts, start=1):
+            try:
+                ok = fill_and_submit(prompt, i, len(prompts))
+                if ok:
+                    submitted.append(prompt)
+            except Exception as e:
+                print(f"  ERROR on prompt {i}: {e}")
+                pw_screenshot(f"debug-error-{i}.png")
+                continue
+
+    finally:
+        close_browser()
+
+    if not submitted:
+        print("\nNo prompts were successfully submitted.")
+        return
+
+    print(f"\n=== {len(submitted)}/{len(prompts)} prompts submitted ===")
+
+    # --- 4. Discover new clips via feed diff --------------------------------
+    print("\n=== Discovering new clips ===\n")
+    # Refresh JWT (may have expired during browser session)
+    jwt = refresh_jwt(session)
+
+    # Wait a moment for the feed to update
+    time.sleep(5)
+
+    feed_after = snapshot_feed_ids(session, jwt)
+    new_ids = feed_after - feed_before
+    print(f"  Feed now has {len(feed_after)} clips. New: {len(new_ids)}")
+
+    if not new_ids:
+        print("  No new clips detected in feed. They may still be processing.")
+        print("  Use 'bin/suno feed' to check manually later.")
+
+    # --- 5. Poll and download -----------------------------------------------
+    if new_ids:
+        print(f"\n=== Polling {len(new_ids)} new clip(s) ===\n")
+        try:
+            jwt = refresh_jwt(session)
+            clips = wait_for_completion(session, jwt, list(new_ids))
+
+            if not args.no_download:
+                print(f"\n=== Downloading {len(clips)} clip(s) ===\n")
+                for clip in clips:
+                    if clip["status"] == "complete":
+                        download_clip(clip)
+                    else:
+                        print(f"  Skipped {clip['id']} (status: {clip['status']})")
+            else:
+                print("  --no-download: skipping downloads.")
+                for clip in clips:
+                    print(f"  {clip['id']}  {clip['status']}  {clip.get('title', '')}")
+
+        except TimeoutError as e:
+            print(f"  Polling timed out: {e}")
+            print("  Use 'bin/suno poll <id> --wait' to retry later.")
+
+    # --- 6. Update generated_tracks.json -----------------------------------
+    print("\n=== Updating generated tracks ===\n")
+    generated = load_generated()
+    for prompt in submitted:
+        generated.add(prompt["source_track_id"])
+    save_generated(generated)
+    print(f"  Marked {len(submitted)} source track(s) as generated.")
+    print(f"  Total generated: {len(generated)}")
+
+    print("\nDone.")
+
+
+if __name__ == "__main__":
+    main()

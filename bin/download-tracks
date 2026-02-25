@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Download completed Suno clips. Wrapper for lib/download_tracks.py."""
+import os, sys, site, glob
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_sp = glob.glob(os.path.join(_root, ".venv/lib/python*/site-packages"))
+if _sp: site.addsitedir(_sp[0])
+sys.path.insert(0, os.path.join(_root, "lib"))
+from download_tracks import main
+main()
