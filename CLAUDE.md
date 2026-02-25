@@ -52,6 +52,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Structural metatags in Lyrics field (`[Intro]\n[Slow Build]\n...`) based on genre/duration
   - Negative tags always set to `"vocals, singing, voice, spoken word"` for instrumental tracks
   - API key stored in `.env` as `PERPLEXITY_API_KEY`
+  - **Important:** When Claude is making Perplexity queries directly (not via pipeline scripts), always use the MCP tool rather than curl or calling `lib/perplexity.py`. Pipeline scripts like `bin/generate-prompts` and `bin/refrakt` use the Python library internally — that's fine.
 - **Refrakt** — original songs refracted from existing ones
   - `lib/refrakt.py` + `bin/refrakt` — pick a track from any playlist, fetch original lyrics from Genius, research via Perplexity, synthesize tags
   - `lib/genius.py` — fetches original lyrics from Genius (free API, token in `.env` as `GENIUS_ACCESS_TOKEN`)
@@ -70,7 +71,11 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 - `.claude/agents/suno-prompt.md` — Haiku agent for tag generation with vocal character
   - Reads research + vocal prompting guide → writes optimized `tags` and `negative_tags`
   - Vocal descriptors placed early in tag string for higher Suno weight
-  - Pipeline: `bin/refrakt` → Refrakt agent (lyrics) → suno-prompt agent (tags) → `/suno-generate`
+  - Pipeline: `bin/refrakt` → Refrakt agent (lyrics) → suno-prompt agent (tags) → song-title agent (title) → `/suno-generate`
+- `.claude/agents/song-title.md` — Haiku agent for creative song title generation
+  - Mines refracted lyrics or research for the most evocative image/phrase
+  - Replaces generic auto-generated titles with specific, intriguing names
+  - Varies structure: 1-5 words, not always two abstract words
 - `bin/suno-fill-form` — form fill helper for Suno browser automation
   - Reads `prompts_data.json`, fills Styles/Title/Lyrics/Instrumental via `playwright-cli run-code`
   - Uses `getByRole('textbox', {name: /pattern/})` — Suno's React components don't have HTML placeholder attributes, so CSS selectors fail. Role-based selectors read from the accessibility tree.

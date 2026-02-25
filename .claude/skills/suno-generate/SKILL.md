@@ -56,6 +56,15 @@ Prompt: "Read .claude/agents/suno-prompt.md for instructions, then process promp
 
 This reads the research field (which now includes vocal character description) and the vocal prompting guide to generate optimized style tags with explicit vocal descriptors (gender, tone, texture) placed early for maximum weight.
 
+After tags are generated, spawn the song-title agent to replace the auto-generated title with a creative one:
+
+```
+Task tool: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/song-title.md for instructions, then process prompts_data.json"
+```
+
+This mines the refracted lyrics (for vocals) or research (for instrumentals) to find the most evocative image or phrase, and writes a compelling title that varies in structure (1-5 words, not always two abstract words).
+
 This writes `prompts_data.json`. Read that file to get the list of prompts. Each entry has:
 - `source_track_id` — Spotify track ID (for tracking)
 - `source_track_name` — original track name (for reference only, never sent to Suno)
