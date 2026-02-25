@@ -29,7 +29,7 @@ _BASE_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = _BASE_DIR / "output"
 PROMPTS_FILE = _BASE_DIR / "prompts_data.json"
 CDN_BASE = "https://cdn1.suno.ai"
-ALBUM_NAME = "Wordless Work (Suno)"
+DEFAULT_ALBUM_NAME = "Refrakt"
 ARTIST_NAME = "Refrakt"
 
 
@@ -102,7 +102,8 @@ def tag_file(filepath: str | Path, clip: dict, prompt: dict | None = None) -> No
     # Core atoms
     audio["\xa9nam"] = [title]                     # Title
     audio["\xa9ART"] = [ARTIST_NAME]               # Artist
-    audio["\xa9alb"] = [ALBUM_NAME]                # Album
+    album = (prompt or {}).get("source_playlist", DEFAULT_ALBUM_NAME)
+    audio["\xa9alb"] = [album]                     # Album (from source playlist)
     if tags_str:
         audio["\xa9gen"] = [tags_str]              # Genre
     if created_at:

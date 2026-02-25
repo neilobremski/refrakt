@@ -277,6 +277,16 @@ def cmd_download(args):
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+    # Load prompts for album name metadata (matched per-clip by title)
+    prompts = []
+    try:
+        with open(str(_BASE_DIR / "prompts_data.json")) as f:
+            prompts = json.load(f)
+        if not isinstance(prompts, list):
+            prompts = []
+    except (OSError, json.JSONDecodeError):
+        pass
+
     for i, clip in enumerate(clips, start=1):
         clip_id = clip["id"]
         status = clip["status"]
@@ -303,10 +313,11 @@ def cmd_download(args):
         size = download_file(m4a_url, dest)
         print(f"       Done ({size // 1024} KB)")
 
-        # Tag with metadata
+        # Tag with metadata (match clip to prompt by title for album name)
         try:
-            from tag_tracks import tag_file
-            tag_file(dest, clip)
+            from tag_tracks import tag_file, match_prompt_to_clip
+            prompt_entry = match_prompt_to_clip(clip, prompts) if prompts else None
+            tag_file(dest, clip, prompt=prompt_entry)
             print(f"       Tagged with metadata.")
         except Exception as e:
             print(f"       WARNING: Could not tag: {e}")
