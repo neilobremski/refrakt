@@ -34,6 +34,9 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 - `suno.py` — CLI for auth verification, credit check, feed listing, polling, and downloading
 - `download_tracks.py` working (standalone download utility)
 - Both download tools prefer `.m4a` (Opus ~143 kbps) over `.mp3` (64 kbps) from the API
+- Post-download transcode: `ffmpeg` converts `.m4a` (Opus) to `.mp3` (320 kbps) for Apple Music compatibility
+  - Apple Music silently rejects Opus-in-M4A containers — the MP3 copy ensures importability
+  - Both files kept: `.m4a` for archival quality, `.mp3` for Apple Music import
 - `bin/suno-generate` — full end-to-end loop: prompt generation → browser automation → polling → download
   - Uses `playwright-cli --headed --persistent` for captcha-free submission
   - Discovers new clips via feed diffing (before/after snapshot)

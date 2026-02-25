@@ -26,6 +26,8 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -146,6 +148,27 @@ def sanitize_filename(name: str) -> str:
     return name.strip().replace(" ", "_")
 
 
+def transcode_to_mp3(m4a_path: str, bitrate: str = "320k") -> str | None:
+    """Transcode .m4a (Opus) to .mp3 for Apple Music compatibility. Returns mp3 path or None."""
+    if not shutil.which("ffmpeg"):
+        return None
+    mp3_path = str(Path(m4a_path).with_suffix(".mp3"))
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-i", m4a_path, "-c:a", "libmp3lame", "-b:a", bitrate,
+             "-map_metadata", "0", "-id3v2_version", "3", "-y", mp3_path],
+            capture_output=True, text=True, timeout=60,
+        )
+        if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
+            return mp3_path
+        print(f"  WARNING: ffmpeg exited {result.returncode}: {result.stderr[:200]}", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        print(f"  WARNING: ffmpeg transcode timed out for {m4a_path}", file=sys.stderr)
+    except OSError as e:
+        print(f"  WARNING: ffmpeg transcode failed: {e}", file=sys.stderr)
+    return None
+
+
 def download_file(url: str, dest_path: str) -> int:
     """Stream-download url to dest_path. Returns file size in bytes."""
     r = requests.get(url, stream=True)
@@ -244,7 +267,7 @@ def cmd_poll(args):
 
 
 def cmd_download(args):
-    """Download completed clips to output/ as .m4a (Opus ~143kbps)."""
+    """Download completed clips to output/ as .m4a (Opus ~143kbps) + .mp3 (320kbps) for Apple Music."""
     session = load_session()
     jwt = refresh_jwt(session)
     clip_ids = args.clip_ids
@@ -287,6 +310,13 @@ def cmd_download(args):
             print(f"       Tagged with metadata.")
         except Exception as e:
             print(f"       WARNING: Could not tag: {e}")
+
+        # Transcode to MP3 for Apple Music compatibility
+        mp3_path = transcode_to_mp3(dest)
+        if mp3_path:
+            print(f"       Transcoded to MP3 ({os.path.getsize(mp3_path) // 1024} KB)")
+        else:
+            print(f"       WARNING: Could not transcode to MP3 (ffmpeg missing or failed)")
 
     print("\nAll downloads complete.")
 
