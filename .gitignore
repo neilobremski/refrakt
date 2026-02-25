@@ -15,3 +15,4 @@ generated_tracks.json
 .playwright-cli/
 .playwright-profile/
 .claude/settings.local.json
+.playlist_cache.json

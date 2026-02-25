@@ -42,6 +42,8 @@ load_dotenv(BASE_DIR / ".env")
 
 PROMPTS_FILE = BASE_DIR / "prompts_data.json"
 RESEARCH_CACHE_FILE = BASE_DIR / ".prompt_research_cache.json"
+PLAYLIST_CACHE_FILE = BASE_DIR / ".playlist_cache.json"
+PLAYLIST_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 
 SUNO_MODEL = "chirp-crow"
 API_DELAY = 1.5
@@ -93,6 +95,61 @@ def get_playlist_tracks(sp, playlist_id, limit=100):
             break
         offset += len(result["items"])
     return tracks
+
+
+# ---------------------------------------------------------------------------
+# Playlist cache
+# ---------------------------------------------------------------------------
+
+def _load_playlist_cache():
+    if PLAYLIST_CACHE_FILE.exists():
+        try:
+            with open(PLAYLIST_CACHE_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _save_playlist_cache(cache):
+    try:
+        tmp = PLAYLIST_CACHE_FILE.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
+        tmp.rename(PLAYLIST_CACHE_FILE)
+    except OSError as e:
+        print(f"WARNING: Could not write playlist cache: {e}", file=sys.stderr)
+
+
+def get_cached_playlist(playlist_name):
+    """Return (playlist_id, tracks) from cache if fresh, else None."""
+    cache = _load_playlist_cache()
+    key = playlist_name.lower()
+    if key in cache:
+        entry = cache[key]
+        try:
+            fetched_at = datetime.fromisoformat(entry["fetched_at"])
+            if fetched_at.tzinfo is None:
+                fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - fetched_at).total_seconds()
+            if age < PLAYLIST_CACHE_TTL:
+                return entry["playlist_id"], entry["tracks"]
+        except (KeyError, ValueError):
+            pass
+    return None
+
+
+def save_playlist_to_cache(playlist_name, playlist_id, tracks):
+    """Save playlist tracks to cache with current timestamp."""
+    cache = _load_playlist_cache()
+    cache[playlist_name.lower()] = {
+        "playlist_name": playlist_name,
+        "playlist_id": playlist_id,
+        "tracks": tracks,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "track_count": len(tracks),
+    }
+    _save_playlist_cache(cache)
 
 
 # ---------------------------------------------------------------------------
@@ -241,32 +298,43 @@ def main():
 
     rng = random.Random(args.seed)
 
-    # Connect to Spotify
-    print(f"Connecting to Spotify...")
-    try:
-        sp = get_spotify_client()
-        user = sp.current_user()
-    except Exception as e:
-        sys.exit(f"ERROR: Spotify connection failed: {e}")
-    print(f"Logged in as: {user['display_name']}")
+    # Check playlist cache first (avoids Spotify API calls if fresh)
+    cached = get_cached_playlist(args.playlist)
+    if cached is not None:
+        playlist_id, tracks = cached
+        print(f"Playlist '{args.playlist}' loaded from cache ({len(tracks)} tracks)")
+    else:
+        # Connect to Spotify
+        print(f"Connecting to Spotify...")
+        try:
+            sp = get_spotify_client()
+            user = sp.current_user()
+        except Exception as e:
+            sys.exit(f"ERROR: Spotify connection failed: {e}")
+        print(f"Logged in as: {user['display_name']}")
 
-    # Find playlist
-    print(f"Looking for playlist: '{args.playlist}'...")
-    try:
-        playlist = find_playlist(sp, args.playlist)
-    except Exception as e:
-        sys.exit(f"ERROR: Spotify API call failed: {e}")
-    if not playlist:
-        sys.exit(f"ERROR: Could not find playlist '{args.playlist}'")
-    print(f"Found: '{playlist['name']}' ({playlist['id']})")
+        # Find playlist
+        print(f"Looking for playlist: '{args.playlist}'...")
+        try:
+            playlist = find_playlist(sp, args.playlist)
+        except Exception as e:
+            sys.exit(f"ERROR: Spotify API call failed: {e}")
+        if not playlist:
+            sys.exit(f"ERROR: Could not find playlist '{args.playlist}'")
+        playlist_id = playlist["id"]
+        print(f"Found: '{playlist['name']}' ({playlist_id})")
 
-    # Fetch tracks
-    print(f"Fetching tracks...")
-    try:
-        tracks = get_playlist_tracks(sp, playlist["id"], limit=500)
-    except Exception as e:
-        sys.exit(f"ERROR: Failed to fetch tracks: {e}")
-    print(f"  {len(tracks)} tracks loaded")
+        # Fetch tracks
+        print(f"Fetching tracks...")
+        try:
+            tracks = get_playlist_tracks(sp, playlist_id, limit=500)
+        except Exception as e:
+            sys.exit(f"ERROR: Failed to fetch tracks: {e}")
+        print(f"  {len(tracks)} tracks loaded")
+
+        # Cache for next time
+        save_playlist_to_cache(args.playlist, playlist_id, tracks)
+        print(f"  Cached to {PLAYLIST_CACHE_FILE.name}")
 
     # List mode
     if args.list_tracks:

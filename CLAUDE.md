@@ -259,6 +259,7 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
 - Output data: `playlist_data.json` (gitignored)
 - Genre cache: `.lastfm_cache.json` (gitignored, auto-created by `enrich_genres.py`)
 - Research cache: `.prompt_research_cache.json` (gitignored, auto-created by `generate_prompts.py`)
+- Playlist cache: `.playlist_cache.json` (gitignored, 24-hour TTL, avoids Spotify rate limits)
 - Downloaded audio: `output/` (gitignored) — filename format: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
 - Suno session: `.suno_session.json` (gitignored)
 - Generated track tracking: `generated_tracks.json` (tracks which source tracks have been submitted)
