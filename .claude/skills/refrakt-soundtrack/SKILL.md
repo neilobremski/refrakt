@@ -63,10 +63,10 @@ Write lyrics that serve the story beat. The lyrics should:
 
 ## Phase 3 — Title Generation
 
-Spawn the song-title agent, then song-critic agent:
+Spawn the title-designer agent, then title-critic agent:
 ```
-Task: "Read .claude/agents/song-title.md, then process prompts_data.json"
-Task: "Read .claude/agents/song-critic.md, then process prompts_data.json"
+Task: "Read .claude/agents/title-designer.md, then process prompts_data.json"
+Task: "Read .claude/agents/title-critic.md, then process prompts_data.json"
 ```
 
 For soundtracks, titles should feel cinematic (like Hans Zimmer, Trent Reznor, Vangelis cues), not pop songs.

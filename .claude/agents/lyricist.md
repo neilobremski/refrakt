@@ -1,5 +1,5 @@
 ---
-name: refrakt
+name: lyricist
 model: haiku
 allowed-tools: Read, Write, Edit
 ---

@@ -91,11 +91,13 @@ Refrakt/
 │   └── ...
 ├── .claude/
 │   ├── agents/
-│   │   ├── refrakt.md          # Haiku agent: write refracted lyrics
-│   │   ├── suno-prompt.md      # Haiku agent: generate vocal-aware style tags
-│   │   ├── song-title.md       # Haiku agent: generate creative song titles
-│   │   ├── song-critic.md      # Haiku agent: adversarial title evaluation
-│   │   └── code-reviewer.md    # Sonnet agent: security + quality code review
+│   │   ├── lyricist.md         # Haiku: write refracted lyrics
+│   │   ├── producer.md         # Haiku: craft vocal-aware Suno style tags
+│   │   ├── title-designer.md   # Haiku: generate creative song titles
+│   │   ├── title-critic.md     # Haiku: adversarial title evaluation
+│   │   ├── audio-critic.md     # Haiku: Gemini + librosa audio quality eval
+│   │   ├── story-designer.md   # Haiku: narrative arc design (6 frameworks)
+│   │   └── code-reviewer.md    # Sonnet: security + quality code review
 │   └── skills/
 │       ├── autonomous-album/   # Full autonomous album pipeline
 │       ├── refrakt-soundtrack/  # Concept album creation
@@ -176,15 +178,20 @@ bin/suno download <id>...        # Download clips (M4A + MP3 transcode)
 
 ## How It Works
 
-### AI Agent Pipeline
+### The Production Team
 
-The pipeline uses specialized Claude Code agents that work in sequence:
+Seven specialized Claude Code agents, each owning a phase:
 
-1. **Refrakt agent** (Haiku) — writes completely original lyrics from source material
-2. **Suno-prompt agent** (Haiku) — generates vocal-aware style tags with gender/tone/texture
-3. **Song-title agent** (Haiku) — proposes 3 creative title candidates per track
-4. **Song-critic agent** (Haiku) — adversarial evaluation, approves or rejects with feedback
-5. **Code-reviewer agent** (Sonnet) — security/quality review before every git push
+**Creative:** 1. **Lyricist** (Haiku) — writes completely original refracted lyrics from source material
+2. **Story Designer** (Haiku) — designs narrative arcs using Save the Cat, Hero's Journey, 90-Day Novel, and other frameworks
+
+**Production:** 3. **Producer** (Haiku) — crafts vocal-aware Suno style tags with gender/tone/texture
+4. **Title Designer** (Haiku) — proposes 3 creative title candidates per track
+
+**Quality Control:** 5. **Title Critic** (Haiku) — adversarial title evaluation, approves or rejects with feedback
+6. **Audio Critic** (Haiku) — Gemini listening + librosa signal analysis, catches generic tracks and truncation
+
+**Engineering:** 7. **Code Reviewer** (Sonnet) — security/quality review before every git push
 
 ### Quality Evaluation
 

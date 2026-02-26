@@ -56,23 +56,23 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 - **Refrakt** — original songs refracted from existing ones
   - `lib/refrakt.py` + `bin/refrakt` — pick a track from any playlist, fetch original lyrics from Genius, research via Perplexity, synthesize tags
   - `lib/genius.py` — fetches original lyrics from Genius (free API, token in `.env` as `GENIUS_ACCESS_TOKEN`)
-  - `.claude/agents/refrakt.md` — Haiku-powered agent that writes refracted lyrics (same spirit, completely new words)
-  - Pipeline: `bin/refrakt` → spawn Refrakt agent → `/suno-generate`
+  - `.claude/agents/lyricist.md` — Haiku-powered agent that writes refracted lyrics (same spirit, completely new words)
+  - Pipeline: `bin/refrakt` → spawn lyricist agent → `/suno-generate`
   - Artist name on all generated metadata: **"Refrakt"**
   - First refraction: "Glass Cradle" (refracted from "Retrovertigo" by Mr. Bungle, Rocket playlist)
 
 - Vocal character capture in Perplexity research
   - `research_track()` query now explicitly asks for singer's gender, range, tone, delivery, and distinctive traits
-  - Tags left empty by `bin/refrakt` — delegated to suno-prompt agent for richer vocal-aware generation
+  - Tags left empty by `bin/refrakt` — delegated to producer agent for richer vocal-aware generation
 - `docs/suno-vocal-prompting.md` — Suno vocal prompting research guide
   - Vocal descriptor taxonomy (gender, range, texture, delivery, emotional quality)
   - Tag placement strategy (Style Tags for global voice, Lyrics metatags for section changes)
   - Negative tags for gender control, reliable community-tested combos, known limitations
-- `.claude/agents/suno-prompt.md` — Haiku agent for tag generation with vocal character
+- `.claude/agents/producer.md` — Haiku agent for tag generation with vocal character
   - Reads research + vocal prompting guide → writes optimized `tags` and `negative_tags`
   - Vocal descriptors placed early in tag string for higher Suno weight
-  - Pipeline: `bin/refrakt` → Refrakt agent (lyrics) → suno-prompt agent (tags) → song-title agent (title) → `/suno-generate`
-- `.claude/agents/song-title.md` — Haiku agent for creative song title generation
+  - Pipeline: `bin/refrakt` → lyricist agent (lyrics) → producer agent (tags) → title-designer agent (title) → `/suno-generate`
+- `.claude/agents/title-designer.md` — Haiku agent for creative song title generation
   - Mines refracted lyrics or research for the most evocative image/phrase
   - Replaces generic auto-generated titles with specific, intriguing names
   - Varies structure: 1-5 words, not always two abstract words
@@ -84,11 +84,19 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Bypasses shell escaping issues with multi-line lyrics — `json.dumps()` embeds content as JS string literals
   - Claude still handles browser open/cookies/mode switch/captcha/create click interactively
 
-- `.claude/agents/song-critic.md` — Haiku agent for adversarial title evaluation
+- `.claude/agents/title-critic.md` — Haiku agent for adversarial title evaluation
   - Evaluates title candidates against quality heuristics (image test, surprise test, sonic test, genre fit)
   - Uses WebSearch for uniqueness checks (is this already a famous song?)
   - Approves or rejects with specific feedback; max 2 rejection rounds
-  - Sequential pattern: song-title agent → song-critic agent → (repeat if rejected)
+  - Sequential pattern: title-designer agent → title-critic agent → (repeat if rejected)
+- `.claude/agents/audio-critic.md` — Haiku agent for ruthless audio quality evaluation
+  - Combines Gemini 2.5 Flash listening with librosa signal analysis
+  - Detects: truncation, generic loops, batch similarity, low variety, vocal mismatch
+  - Extra strict on instrumental electronic tracks (the biggest quality risk)
+  - Uses `lib/audio_analysis.py` for quantitative metrics
+- `.claude/agents/story-designer.md` — Haiku agent for narrative arc design
+  - 6 frameworks: Save the Cat, Hero's Journey, 90-Day Novel, Story Circle, archetypes, three-act
+  - Designs protagonist with dilemma (not just plot), maps beats to tracks
 - `.claude/agents/code-reviewer.md` — Sonnet agent for code review before pushing
   - Reviews for security (credential exposure, shell injection), bugs, code quality, style
   - Spawned before every `git push`; fix issues and re-run until CLEAR TO PUSH

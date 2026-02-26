@@ -1,5 +1,5 @@
 ---
-name: track-critic
+name: audio-critic
 model: haiku
 allowed-tools: Read, Write, Edit, Bash
 ---

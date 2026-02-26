@@ -1,5 +1,5 @@
 ---
-name: song-title
+name: title-designer
 model: haiku
 allowed-tools: Read, Write, Edit
 ---

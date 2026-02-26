@@ -1,5 +1,5 @@
 ---
-name: song-critic
+name: title-critic
 model: haiku
 allowed-tools: Read, Write, Edit, WebSearch
 ---

@@ -40,27 +40,27 @@ bin/refrakt --playlist "Playlist Name" --index 5
 
 Use `--list` to browse tracks: `bin/refrakt --playlist "Name" --list --random`
 
-After running `bin/refrakt`, spawn the Refrakt agent (Haiku model) to write refracted lyrics from the original:
+After running `bin/refrakt`, spawn the lyricist agent (Haiku model) to write refracted lyrics from the original:
 
 ```
 Task tool: subagent_type="general-purpose", model="haiku"
-Prompt: "Read .claude/agents/refrakt.md for instructions, then process prompts_data.json"
+Prompt: "Read .claude/agents/lyricist.md for instructions, then process prompts_data.json"
 ```
 
-After the Refrakt agent writes refracted lyrics, spawn the suno-prompt agent to optimize tags with vocal descriptors:
+After the lyricist agent writes refracted lyrics, spawn the producer agent to optimize tags with vocal descriptors:
 
 ```
 Task tool: subagent_type="general-purpose", model="haiku"
-Prompt: "Read .claude/agents/suno-prompt.md for instructions, then process prompts_data.json"
+Prompt: "Read .claude/agents/producer.md for instructions, then process prompts_data.json"
 ```
 
 This reads the research field (which now includes vocal character description) and the vocal prompting guide to generate optimized style tags with explicit vocal descriptors (gender, tone, texture) placed early for maximum weight.
 
-After tags are generated, spawn the song-title agent to replace the auto-generated title with a creative one:
+After tags are generated, spawn the title-designer agent to replace the auto-generated title with a creative one:
 
 ```
 Task tool: subagent_type="general-purpose", model="haiku"
-Prompt: "Read .claude/agents/song-title.md for instructions, then process prompts_data.json"
+Prompt: "Read .claude/agents/title-designer.md for instructions, then process prompts_data.json"
 ```
 
 This mines the refracted lyrics (for vocals) or research (for instrumentals) to find the most evocative image or phrase, and writes a compelling title that varies in structure (1-5 words, not always two abstract words).
@@ -172,7 +172,7 @@ bin/suno-fill-form --dry-run              # preview without touching browser
 
 The helper uses Playwright's native locator API (CSS selectors on placeholder text) rather than snapshot ref IDs, so it's resilient to ref rotation.
 
-**If the prompt has an empty `prompt` field:** The Refrakt agent and suno-prompt agent should have already populated the `prompt` and `tags` fields. If `prompt` is still empty, run the agents first before filling the form.
+**If the prompt has an empty `prompt` field:** The lyricist agent and producer agent should have already populated the `prompt` and `tags` fields. If `prompt` is still empty, run the agents first before filling the form.
 
 **If `suno-fill-form` fails** (e.g., can't find a field), fall back to manual filling:
 

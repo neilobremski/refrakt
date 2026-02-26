@@ -164,17 +164,17 @@ For each track, build a prompt entry with:
 
 ### Step 3.2: Generate Titles
 
-Spawn the song-title agent:
+Spawn the title-designer agent:
 ```
 Task: subagent_type="general-purpose", model="haiku"
-Prompt: "Read .claude/agents/song-title.md, then process prompts_data.json.
+Prompt: "Read .claude/agents/title-designer.md, then process prompts_data.json.
 These are soundtrack cues — titles should be cinematic, not pop songs."
 ```
 
-Then the song-critic agent:
+Then the title-critic agent:
 ```
 Task: subagent_type="general-purpose", model="haiku"
-Prompt: "Read .claude/agents/song-critic.md, then process prompts_data.json.
+Prompt: "Read .claude/agents/title-critic.md, then process prompts_data.json.
 Soundtrack context — be demanding but recognize cinematic conventions."
 ```
 

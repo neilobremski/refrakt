@@ -1,5 +1,5 @@
 ---
-name: suno-prompt
+name: producer
 model: haiku
 allowed-tools: Read, Write, Edit
 ---
