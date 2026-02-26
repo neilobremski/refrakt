@@ -1,6 +1,6 @@
 # Refrakt
 
-Original songs refracted from existing ones — plus fully autonomous concept albums. An AI-powered pipeline that analyzes tracks from Spotify playlists, researches their musical character via Perplexity AI, generates original music through Suno AI, evaluates quality with Gemini, creates album art with DALL-E, and publishes to YouTube.
+Original songs refracted from existing ones — plus fully autonomous concept albums. An AI-powered pipeline that analyzes tracks from Spotify playlists, researches their musical character via Perplexity AI, generates original music through Suno AI, evaluates quality with Gemini, creates album art with Gemini (Nano Banana), and publishes to YouTube.
 
 ## Albums
 
@@ -24,6 +24,16 @@ Based on the true story of David Heavens, a homeless man in Santa Monica who off
 
 [Watch on YouTube](https://youtu.be/JrWZt9jNG0o) | [Read the retrospective](docs/retrospectives/full-circle.md)
 
+### Thirteen Billion Years Late
+
+[![Thirteen Billion Years Late](docs/retrospectives/images/thirteen-billion-years-late-cover.jpg)](https://youtu.be/LJvS6sPLndI)
+
+**12 tracks / 38:19 / Dark Ambient IDM + Noir Electronica + Post-Rock**
+
+A radio astronomer named Sable finds a coherent signal from an impossible distance — a galaxy that existed before the models said it could. Built from parallel research on 10 songs across two playlists plus 4 news stories, synthesized by a lead story-writing agent. First album with Gemini (Nano Banana) album art featuring integrated title text.
+
+[Watch on YouTube](https://youtu.be/LJvS6sPLndI) | [Read the retrospective](docs/retrospectives/thirteen-billion-years-late.md)
+
 ---
 
 ## What It Does
@@ -46,7 +56,7 @@ Create a full concept album from scratch — no human input needed:
 
 1. **Find a story** — Perplexity searches the news for compelling narratives
 2. **Design the soundtrack** — Save the Cat beat mapping, sonic palette research, lyrics for vocal tracks
-3. **Generate album art** — DALL-E 3 creates square + widescreen covers
+3. **Generate album art** — Gemini (Nano Banana) creates square + widescreen covers with title text
 4. **Generate all tracks** via Suno, evaluate with Gemini, auto-select best versions
 5. **Package** — tag metadata, embed cover art, concatenate full album
 6. **Upload to YouTube** — create video, fill metadata, publish
@@ -94,12 +104,14 @@ Refrakt/
 │   ├── retrospectives/         # Album write-ups with learnings
 │   │   ├── alive-through-the-rift.md
 │   │   ├── full-circle.md
+│   │   ├── thirteen-billion-years-late.md
 │   │   └── images/
 │   ├── suno-vocal-prompting.md # Vocal tag reference guide
 │   └── ...
 ├── output/                     # Generated audio (gitignored)
 │   ├── Alive Through the Rift/ # First concept album
 │   ├── Full Circle/            # Second concept album (autonomous)
+│   ├── Thirteen Billion Years Late/ # Third concept album (research team)
 │   └── *.mp3 / *.m4a          # Individual refracted tracks
 └── requirements.txt
 ```
@@ -185,9 +197,11 @@ Cost: ~$0.004 per track evaluation.
 
 ### Album Art
 
-**DALL-E 3** generates two versions:
-- Square (1024x1024) — embedded in MP3 metadata for Apple Music
-- Widescreen (1792x1024) — used for YouTube video thumbnail
+**Gemini (Nano Banana)** generates album art via browser automation:
+- Widescreen 16:9 (2752x1536) — used for YouTube video
+- Square 1:1 (2048x2048) — embedded in MP3 metadata for Apple Music
+- Album title + artist name integrated as text on the image
+- Iterative refinement in one conversation (style → square → widescreen → add text)
 
 ### Browser Automation
 
@@ -210,7 +224,7 @@ The persistent profile ensures hCaptcha auto-passes on Suno without visual chall
 | Suno browser submission + download | Working |
 | MP3 transcode (320kbps for Apple Music) | Working |
 | Gemini audio evaluation | Working |
-| DALL-E album art generation | Working |
+| Gemini (Nano Banana) album art | Working |
 | Autonomous album creation | Working |
 | YouTube upload | Working |
 | Code review before push | Working |

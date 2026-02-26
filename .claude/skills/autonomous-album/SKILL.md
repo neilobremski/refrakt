@@ -1,6 +1,6 @@
 ---
 name: autonomous-album
-description: Fully autonomous concept album creation — from finding a topic to publishing on YouTube. Finds a story in the news, designs a soundtrack, generates all music via Suno, creates album art via DALL-E, evaluates tracks with Gemini, and uploads to YouTube.
+description: Fully autonomous concept album creation — from finding a topic to publishing on YouTube. Finds a story in the news, designs a soundtrack, generates all music via Suno, creates album art via Gemini (Nano Banana), evaluates tracks with Gemini, and uploads to YouTube.
 ---
 
 # /autonomous-album — Fully Autonomous Album Creation
@@ -65,8 +65,8 @@ bin/suno auth
 # 3. Test Gemini API
 .venv/bin/python -c "from lib.gemini_audio import _load_api_key; print('Gemini OK:', bool(_load_api_key()))"
 
-# 4. Test DALL-E API
-.venv/bin/python -c "from lib.dalle_art import _load_api_key; print('DALL-E OK:', bool(_load_api_key()))"
+# 4. Verify Playwright persistent profile exists (for Gemini art + Suno submission)
+ls .playwright-profile/Default/Preferences > /dev/null && echo "Playwright profile OK"
 ```
 
 If any check fails, alert the user and stop. Do NOT proceed with a partial pipeline.
@@ -184,26 +184,39 @@ If any titles are rejected, run title agent again with critic feedback, then re-
 
 ## Phase 4 — Generate Album Art (1-2 minutes)
 
-### Step 4.1: Write Art Prompts
+### Step 4.1: Write Art Prompt
 
-Based on the story and tracklist, write two DALL-E prompts:
-- **Square (1024x1024)**: Album cover for MP3 metadata. Include the most iconic visual moment from the story. Always end with "No text on the image."
-- **Widescreen (1792x1024)**: YouTube thumbnail. Same scene but composed for 16:9. Always end with "No text on the image."
+Based on the story and tracklist, write a detailed image generation prompt describing:
+- The most iconic visual moment from the story
+- Style, mood, color palette, composition
+- "No text or lettering on the image" (text is added in step 4.3)
 
-### Step 4.2: Generate Images
+### Step 4.2: Generate Images via Gemini (Nano Banana)
 
-```python
-from lib.dalle_art import generate_album_art
-results = generate_album_art(
-    prompt="...",
-    output_dir="output/ALBUM_NAME",
-    name="album-cover",
-    square=True,
-    widescreen=True,
-)
-```
+Use Playwright to interact with Gemini's image generation:
 
-This creates `album-cover.png` (square) and `album-cover-wide.png` (widescreen).
+1. Open Gemini in persistent browser: `playwright-cli open --headed --persistent --profile=.playwright-profile "https://gemini.google.com"`
+2. User selects "Thinking" model from dropdown
+3. Type the art prompt requesting **widescreen 16:9** aspect ratio first
+4. Wait for generation, download via "Download full size image" button
+5. Ask Gemini to regenerate in **square 1:1** aspect ratio with same composition
+6. Download the square version
+
+**IMPORTANT:** Gemini images are ~2048-2752px. Never read them with Claude's Read tool (breaks context >2000px). Use accessibility snapshots only.
+
+### Step 4.3: Add Title Text
+
+Ask Gemini to add album title + artist name to both images:
+- "ALBUM TITLE" in clean, modern, slightly futuristic sans-serif font, lower third
+- "ARTIST NAME" in smaller text below
+- Light/white with subtle glow effect for readability on dark backgrounds
+- Download both titled versions
+
+### Step 4.4: Save to Album Folder
+
+Copy images from `.playwright-cli/` to `output/ALBUM_NAME/`:
+- `cover.png` — square with title (for MP3 metadata)
+- `cover-wide.png` — widescreen with title (for YouTube video)
 
 ---
 
@@ -315,7 +328,7 @@ Do NOT use `-c copy` — variable-bitrate MP3 concat with copy produces wrong du
 
 Tag the full album MP3 with metadata + cover art.
 
-### Step 7.3: Generate Album Report
+### Step 7.4: Generate Album Report
 
 Save `_album_report.md` with:
 - Album concept summary
@@ -389,7 +402,7 @@ Create `docs/retrospectives/<album-name-kebab>.md` documenting:
 4. **Vocal tracks** — the lyrics and their significance
 5. **Title generation** — notable titles and the critic's feedback
 6. **Technical learnings** — what worked, what broke, what to do differently
-7. **Album art** — the DALL-E prompt and the result
+7. **Album art** — the Gemini art prompt and the result
 
 Include:
 - Album cover image: convert to JPG, save to `docs/retrospectives/images/`, embed in markdown
@@ -429,7 +442,7 @@ Print a summary to the user:
 
   Cost:
     Suno:   [N × 10] credits
-    DALL-E: $0.08 (2 images)
+    Gemini art: $0.00 (free via browser)
     Gemini: ~$[0.004 × N × 2] (audio eval)
     Total:  ~$[total]
 
@@ -449,7 +462,7 @@ Print a summary to the user:
 - **Suno session expired**: Print "Suno session expired. Please re-authenticate and restart." Stop.
 - **YouTube not logged in**: Print "Please log into YouTube in the browser window." Wait for user confirmation.
 - **Gemini rate limit**: Wait 60 seconds, retry. Max 3 retries.
-- **DALL-E content policy rejection**: Adjust prompt (remove violent/explicit terms), retry. Max 3 retries.
+- **Gemini image generation failure**: Rephrase prompt, retry. If Gemini browser session expired, ask user to re-navigate. Max 3 retries.
 - **Suno generates vocals on instrumental track**: Flag in report, suggest regeneration with stronger negative tags.
 - **All clips for a track score < 3**: Regenerate with adjusted tags. Max 3 attempts.
 

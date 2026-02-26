@@ -104,13 +104,18 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Save tracklist intentions to `_tracklist.json` for re-generation reference
   - Full pipeline: research palette → build prompts → title/critic agents → submit → Gemini eval → user picks A/B → tag → concat → YouTube
   - First soundtrack: "Alive Through the Rift" by Denumerator (16 tracks, futuristic blues + industrial rock)
-- `lib/dalle_art.py` — DALL-E 3 album art generation
+- `lib/dalle_art.py` — DALL-E 3 album art generation (legacy, replaced by Gemini)
   - Generates square (1024x1024) for MP3 metadata and widescreen (1792x1024) for YouTube
   - API key in `.env` as `OPENAI_API_KEY`
-  - Cost: $0.04 per image ($0.08 for both sizes)
+- **Album art via Gemini (Nano Banana)** — preferred method
+  - Generate via Playwright browser automation at gemini.google.com (Thinking model)
+  - Widescreen 16:9 for YouTube, square 1:1 for MP3 metadata
+  - Add album title + artist name as text on the image (Gemini handles text well)
+  - Free (no API cost), higher quality than DALL-E, supports iterative refinement
+  - **Never read Gemini images with Claude's Read tool** — they're >2000px and break context
 - `/autonomous-album` skill — fully autonomous concept album creation
   - From news topic to YouTube in ~45 minutes with zero human input (except auth)
-  - Pipeline: Perplexity → story → beats → prompts → DALL-E art → Suno → Gemini eval → auto-select → tag → concat → YouTube
+  - Pipeline: Perplexity → story → beats → prompts → Gemini art → Suno → Gemini eval → auto-select → tag → concat → YouTube
 - **YouTube upload** workflow via Playwright browser automation
   - Create video from album: `ffmpeg -loop 1 -i cover.jpeg -i album.mp3 -c:v libx264 -tune stillimage -c:a aac -b:a 320k -pix_fmt yuv420p -shortest output.mp4`
   - **Use 16:9 widescreen image (1920x1080) for YouTube** — square album art crops badly
