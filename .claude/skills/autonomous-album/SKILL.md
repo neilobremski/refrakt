@@ -19,6 +19,37 @@ Create an entire concept album from scratch — no human input needed after laun
 
 ---
 
+## Timing
+
+Track wall-clock time for each phase. At the start of the pipeline, note the current time. At the end of each phase, record elapsed time. Save all timings to `_timings.json` in the album folder:
+
+```json
+{
+  "started_at": "2026-02-26T12:00:00",
+  "phases": {
+    "pre_flight": {"duration_sec": 15},
+    "find_story": {"duration_sec": 180},
+    "design_album": {"duration_sec": 300},
+    "build_prompts": {"duration_sec": 120},
+    "album_art": {"duration_sec": 45},
+    "suno_submission": {"duration_sec": 240},
+    "suno_polling": {"duration_sec": 600},
+    "suno_download": {"duration_sec": 120},
+    "gemini_eval": {"duration_sec": 180},
+    "packaging": {"duration_sec": 90},
+    "youtube_video": {"duration_sec": 60},
+    "youtube_upload": {"duration_sec": 120},
+    "retrospective": {"duration_sec": 180}
+  },
+  "total_sec": 2250,
+  "total_human": "37 min 30 sec"
+}
+```
+
+Use `date +%s` or Python `time.time()` to capture timestamps. Include these timings in both the final summary and the retrospective.
+
+---
+
 ## Pre-Flight Checks
 
 Before starting, verify all systems:
@@ -364,6 +395,7 @@ Include:
 - Album cover image: convert to JPG, save to `docs/retrospectives/images/`, embed in markdown
 - YouTube link
 - Creation date and pipeline used
+- **Phase-by-phase timing breakdown** from `_timings.json` — how long each step actually took, where bottlenecks were, comparison to estimates
 
 This becomes a permanent record that visitors to the GitHub repo can read to understand how each album was made.
 
@@ -391,6 +423,7 @@ Print a summary to the user:
     output/[album]/_tracklist.json
     output/[album]/_album_report.md
     output/[album]/_youtube_description.txt
+    output/[album]/_timings.json
 
   YouTube:  [URL]
 
@@ -399,6 +432,13 @@ Print a summary to the user:
     DALL-E: $0.08 (2 images)
     Gemini: ~$[0.004 × N × 2] (audio eval)
     Total:  ~$[total]
+
+  Timing:
+    Story + design:    [X] min
+    Suno gen + poll:   [X] min
+    Gemini eval:       [X] min
+    Packaging + upload:[X] min
+    Total:             [X] min
 ============================================================
 ```
 
