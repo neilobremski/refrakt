@@ -1,0 +1,397 @@
+---
+name: autonomous-album
+description: Fully autonomous concept album creation — from finding a topic to publishing on YouTube. Finds a story in the news, designs a soundtrack, generates all music via Suno, creates album art via DALL-E, evaluates tracks with Gemini, and uploads to YouTube.
+---
+
+# /autonomous-album — Fully Autonomous Album Creation
+
+Create an entire concept album from scratch — no human input needed after launch (except auth sessions).
+
+## Arguments
+
+- `--tracks <N>` — number of tracks (default: 12, range: 8-16)
+- `--artist <name>` — artist name for metadata (default: "Denumerator")
+- `--genre <hint>` — optional genre direction (e.g., "synthwave + jazz", "orchestral + metal"). If omitted, the AI chooses based on the story.
+- `--vocal-tracks <N>` — number of tracks with vocals (default: 2)
+- `--visibility <public|unlisted|private>` — YouTube visibility (default: unlisted)
+- `--skip-youtube` — skip the YouTube upload step
+- `--dry-run` — plan everything but don't submit to Suno or upload
+
+---
+
+## Pre-Flight Checks
+
+Before starting, verify all systems:
+
+```bash
+# 1. Check Suno credits
+bin/suno credits
+# Need: tracks × 10 credits (e.g., 12 tracks = 120 credits)
+
+# 2. Verify Suno session
+bin/suno auth
+
+# 3. Test Gemini API
+.venv/bin/python -c "from lib.gemini_audio import _load_api_key; print('Gemini OK:', bool(_load_api_key()))"
+
+# 4. Test DALL-E API
+.venv/bin/python -c "from lib.dalle_art import _load_api_key; print('DALL-E OK:', bool(_load_api_key()))"
+```
+
+If any check fails, alert the user and stop. Do NOT proceed with a partial pipeline.
+
+---
+
+## Phase 1 — Find a Story (3-5 minutes)
+
+### Step 1.1: Discover a Topic
+Use Perplexity MCP to find something compelling in the news:
+
+```
+"What are the most emotionally compelling, visually striking, or philosophically interesting
+stories in the news right now? I'm looking for something that could inspire a concept album
+soundtrack — it should have narrative arc potential (conflict, transformation, resolution).
+Give me 5 options with a one-sentence pitch for each."
+```
+
+### Step 1.2: Pick the Best Story
+Choose the story with the strongest narrative arc. Prefer stories that are:
+- Emotionally resonant (not just factual)
+- Visually cinematic (landscapes, conflict, transformation)
+- Universal enough that the album stands alone without knowing the news source
+
+### Step 1.3: Research the Story Deeply
+Use Perplexity MCP to get details:
+
+```
+"Tell me the full story of [topic]. I need: the key characters, the timeline of events,
+the emotional arc, the central conflict, and the resolution (or current state if ongoing).
+What are the most vivid, visual moments? What emotions does each stage evoke?"
+```
+
+---
+
+## Phase 2 — Design the Album (5-10 minutes)
+
+### Step 2.1: Map Story to Save the Cat Beats
+
+Create a beat sheet mapping the story to tracks. Use this template:
+
+| # | Beat | Story Moment | Mood | Tempo | Vocal? |
+|---|------|-------------|------|-------|--------|
+| 1 | Opening Image | [scene] | [mood] | [BPM] | No |
+| ... | ... | ... | ... | ... | ... |
+| N-1 | Final Image | [scene] | [mood] | [BPM] | No |
+| N | Credits | [abstract theme] | [mood] | [BPM] | Yes |
+
+Rules for vocal track placement:
+- One vocal track at the emotional nadir (typically "Dark Night of the Soul" or "All Is Lost")
+- One vocal track for credits (last track — abstract, philosophical)
+- Additional vocal tracks only if the story demands it
+
+### Step 2.2: Choose a Sonic Palette
+
+Use Perplexity MCP to research a genre fusion that matches the story's world:
+
+```
+"Describe the sonic palette of a film soundtrack that fuses [genre A], [genre B], and [genre C].
+How would these genres blend? What instruments, production techniques, and textures define this?"
+```
+
+If `--genre` was provided, use that as the base. Otherwise, choose genres that match the story's setting and emotional register.
+
+### Step 2.3: Write Lyrics for Vocal Tracks
+
+Write lyrics from the protagonist's perspective at the relevant story moment:
+- Use Suno metatags: `[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`, `[Fade To End]`
+- Keep under 200 words per song
+- The credits track should be abstract/philosophical — hinting at the album's theme without being literal
+
+### Step 2.4: Save the Tracklist
+
+Save `_tracklist.json` in the album's output folder with full track intentions (beat, concept, mood, tempo, genre weight, vocal flag, lyrics if applicable). This is the re-generation reference.
+
+---
+
+## Phase 3 — Build Prompts (2-3 minutes)
+
+### Step 3.1: Create `prompts_data.json`
+
+For each track, build a prompt entry with:
+- `source_track_name`: "Track N: Beat Name"
+- `source_playlist`: Album name
+- `tags`: Per-track tags (120-200 chars) blending the album's genre base with track-specific mood/tempo
+- `negative_tags`: `"vocals, singing, voice, spoken word"` for instrumentals; opposite gender for vocals
+- `prompt`: Structural metatags for instrumentals; full lyrics for vocal tracks
+- `make_instrumental`: true/false
+- `research`: Track concept + mood + genre weight (from tracklist)
+
+### Step 3.2: Generate Titles
+
+Spawn the song-title agent:
+```
+Task: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/song-title.md, then process prompts_data.json.
+These are soundtrack cues — titles should be cinematic, not pop songs."
+```
+
+Then the song-critic agent:
+```
+Task: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/song-critic.md, then process prompts_data.json.
+Soundtrack context — be demanding but recognize cinematic conventions."
+```
+
+If any titles are rejected, run title agent again with critic feedback, then re-evaluate. Max 2 rounds.
+
+---
+
+## Phase 4 — Generate Album Art (1-2 minutes)
+
+### Step 4.1: Write Art Prompts
+
+Based on the story and tracklist, write two DALL-E prompts:
+- **Square (1024x1024)**: Album cover for MP3 metadata. Include the most iconic visual moment from the story. Always end with "No text on the image."
+- **Widescreen (1792x1024)**: YouTube thumbnail. Same scene but composed for 16:9. Always end with "No text on the image."
+
+### Step 4.2: Generate Images
+
+```python
+from lib.dalle_art import generate_album_art
+results = generate_album_art(
+    prompt="...",
+    output_dir="output/ALBUM_NAME",
+    name="album-cover",
+    square=True,
+    widescreen=True,
+)
+```
+
+This creates `album-cover.png` (square) and `album-cover-wide.png` (widescreen).
+
+---
+
+## Phase 5 — Submit to Suno (15-25 minutes)
+
+### Step 5.1: Open Browser
+
+```bash
+playwright-cli open --headed --persistent --profile=.playwright-profile "https://suno.com/create"
+```
+
+Inject session cookies from `.suno_session.json`, reload.
+
+### Step 5.2: Submit Each Track
+
+For each track (index 0 through N-1):
+```bash
+playwright-cli reload          # CRITICAL: prevents stale form data
+sleep 3
+bin/suno-fill-form --index I
+sleep 1
+playwright-cli run-code "async page => { await page.getByRole('button', { name: 'Create song' }).click(); return 'ok'; }"
+sleep 5
+bin/suno feed | grep "TITLE"   # verify title appears
+```
+
+**If a title doesn't appear in the feed**, the submission failed. Retry that track (reload + fill + submit again).
+
+### Step 5.3: Close Browser
+
+```bash
+playwright-cli close
+```
+
+### Step 5.4: Poll Until Complete
+
+Get all clip IDs from the feed, then:
+```bash
+bin/suno poll <all_clip_ids> --wait
+```
+
+### Step 5.5: Download All Clips
+
+```bash
+bin/suno download <all_clip_ids>
+```
+
+---
+
+## Phase 6 — Evaluate and Select (3-5 minutes)
+
+### Step 6.1: Gemini Audio Evaluation
+
+For each clip (2 per track), run:
+```python
+from lib.gemini_audio import evaluate_track
+result = evaluate_track(audio_path, tags=tags, mood=mood, title=title, is_instrumental=is_inst)
+```
+
+### Step 6.2: Auto-Select Best Version
+
+For each track, compare the two clips:
+1. If one scores higher overall → pick it
+2. If tied on overall score → pick the one with higher `artistic_interest`
+3. If still tied → pick clip A (first generated)
+
+### Step 6.3: Rename Files
+
+Rename selected clips to `##. Title.mp3` in the album folder. Remove rejected clips.
+
+### Step 6.4: Handle Regeneration
+
+If any track gets `verdict: "Regenerate"` on BOTH clips:
+1. Log the issue (which track, what the eval said)
+2. Re-read `_tracklist.json` for the original intentions
+3. Rebuild that track's prompt (possibly adjust tags based on Gemini's feedback)
+4. Re-submit to Suno (open browser, submit just that track)
+5. Re-evaluate
+6. Max 3 attempts per track. After 3, pick the best of all attempts.
+
+---
+
+## Phase 7 — Package the Album (2-3 minutes)
+
+### Step 7.1: Tag All Tracks
+
+For each final MP3:
+```python
+from mutagen.id3 import ID3, TPE1, TPE2, TALB, TIT2, TRCK, TCON, APIC, TDRC
+```
+Set: title, artist, album artist, album, track number (N/total), genre, year, cover art (square PNG).
+
+### Step 7.2: Create Full Album MP3
+
+```bash
+# Build concat list
+ls album_dir/*.mp3 | sort | while read f; do echo "file '$f'"; done > /tmp/concat.txt
+# Concatenate
+ffmpeg -f concat -safe 0 -i /tmp/concat.txt -c copy "ALBUM (Full Album).mp3"
+```
+
+Tag the full album MP3 with metadata + cover art.
+
+### Step 7.3: Generate Album Report
+
+Save `_album_report.md` with:
+- Album concept summary
+- Track-by-track Gemini scores
+- Which clip was selected for each track (A or B) and why
+- Any tracks that needed regeneration
+- Total cost (Suno credits + API costs)
+
+---
+
+## Phase 8 — Create YouTube Video (1-2 minutes)
+
+### Step 8.1: Create MP4
+
+**Use the widescreen image** (`album-cover-wide.png`), not the square:
+
+```bash
+ffmpeg -loop 1 -i "album-cover-wide.png" -i "ALBUM (Full Album).mp3" \
+  -c:v libx264 -tune stillimage -c:a aac -b:a 320k \
+  -pix_fmt yuv420p -shortest -y "ALBUM (Full Album).mp4"
+```
+
+### Step 8.2: Generate YouTube Description
+
+Read each individual MP3's duration and build:
+- Album title + artist
+- Story concept (2-3 sentences)
+- Tracklist with timestamps
+- Genre, runtime, credits, hashtags
+
+Save to `_youtube_description.txt`.
+
+---
+
+## Phase 9 — Upload to YouTube (2-3 minutes)
+
+### Step 9.1: Open YouTube Studio
+
+```bash
+playwright-cli open --headed --persistent --profile=.playwright-profile "https://studio.youtube.com"
+```
+
+If not logged in, alert user and wait. This is the ONE required human interaction.
+
+### Step 9.2: Upload and Publish
+
+Follow the `/youtube-upload` skill:
+1. Create → Upload videos → set file input
+2. Fill title: `"ALBUM NAME — Full Album | ARTIST (2026)"`
+3. Fill description from `_youtube_description.txt`
+4. Audience: "No, it's not made for kids"
+5. Next × 3 → Visibility → set per `--visibility` arg
+6. Publish/Save
+7. Note the video URL
+
+### Step 9.3: Close Browser
+
+```bash
+playwright-cli close
+```
+
+---
+
+## Phase 10 — Final Summary
+
+Print a summary to the user:
+
+```
+============================================================
+  AUTONOMOUS ALBUM COMPLETE
+
+  Album:    [name]
+  Artist:   [artist]
+  Tracks:   [N] ([N-vocal] vocal, [N-inst] instrumental)
+  Runtime:  [MM:SS]
+
+  Files:
+    output/[album]/##. Track Name.mp3  (individual tracks)
+    output/[album]/[album] (Full Album).mp3
+    output/[album]/[album] (Full Album).mp4
+    output/[album]/album-cover.png (square)
+    output/[album]/album-cover-wide.png (widescreen)
+    output/[album]/_tracklist.json
+    output/[album]/_album_report.md
+    output/[album]/_youtube_description.txt
+
+  YouTube:  [URL]
+
+  Cost:
+    Suno:   [N × 10] credits
+    DALL-E: $0.08 (2 images)
+    Gemini: ~$[0.004 × N × 2] (audio eval)
+    Total:  ~$[total]
+============================================================
+```
+
+---
+
+## Error Handling
+
+- **Suno session expired**: Print "Suno session expired. Please re-authenticate and restart." Stop.
+- **YouTube not logged in**: Print "Please log into YouTube in the browser window." Wait for user confirmation.
+- **Gemini rate limit**: Wait 60 seconds, retry. Max 3 retries.
+- **DALL-E content policy rejection**: Adjust prompt (remove violent/explicit terms), retry. Max 3 retries.
+- **Suno generates vocals on instrumental track**: Flag in report, suggest regeneration with stronger negative tags.
+- **All clips for a track score < 3**: Regenerate with adjusted tags. Max 3 attempts.
+
+---
+
+## Timing Estimate
+
+| Phase | Time |
+|-------|------|
+| 1. Find story | 3-5 min |
+| 2. Design album | 5-10 min |
+| 3. Build prompts | 2-3 min |
+| 4. Album art | 1-2 min |
+| 5. Suno submission + poll | 15-25 min |
+| 6. Evaluate + select | 3-5 min |
+| 7. Package | 2-3 min |
+| 8. YouTube video | 1-2 min |
+| 9. YouTube upload | 2-3 min |
+| **Total** | **35-60 min** |
