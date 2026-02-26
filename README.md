@@ -1,73 +1,107 @@
 # Refrakt
 
-Original songs refracted from existing ones. An automated pipeline that analyzes tracks from Spotify playlists, researches their musical character via Perplexity AI, and generates original music through Suno AI — both instrumentals and vocal tracks with newly written lyrics.
+Original songs refracted from existing ones — plus fully autonomous concept albums. An AI-powered pipeline that analyzes tracks from Spotify playlists, researches their musical character via Perplexity AI, generates original music through Suno AI, evaluates quality with Gemini, creates album art with DALL-E, and publishes to YouTube.
+
+## Albums
+
+### Alive Through the Rift
+
+[![Alive Through the Rift](docs/retrospectives/images/alive-through-the-rift-cover.jpg)](https://youtu.be/Cn2W7uO-zls)
+
+**16 tracks / 42:49 / Futuristic Blues + Industrial Rock**
+
+A post-apocalyptic robot adventurer steps through an interdimensional rift, meets a human girl, and discovers what it means to be alive. Mapped to the Save the Cat beat sheet.
+
+[Watch on YouTube](https://youtu.be/Cn2W7uO-zls) | [Read the retrospective](docs/retrospectives/alive-through-the-rift.md)
+
+### Full Circle
+
+[![Full Circle](docs/retrospectives/images/full-circle-cover.jpg)](https://youtu.be/JrWZt9jNG0o)
+
+**12 tracks / 27:27 / Lo-Fi Americana + Ambient Electronic + Cinematic Post-Rock**
+
+Based on the true story of David Heavens, a homeless man in Santa Monica who offered free help on a neighborhood app and became the caregiver and best friend of Frank, a 91-year-old Navy veteran. Created entirely by the autonomous pipeline.
+
+[Watch on YouTube](https://youtu.be/JrWZt9jNG0o) | [Read the retrospective](docs/retrospectives/full-circle.md)
+
+---
 
 ## What It Does
 
-### Instrumental pipeline (Wordless Work)
+### Refraction Pipeline
 
-1. **Fetch playlist** — Pulls tracks from a Spotify playlist
-2. **Enrich genres** — Queries Last.fm `artist.getTopTags` for genre tags
-3. **Research + generate prompts** — Uses Perplexity AI to research each track's sonic character, then synthesizes rich Suno style tags (120-200 chars with textures, mood, BPM) and structural metatags
-4. **Generate music** — Submits prompts to Suno AI via headed browser automation, polls for completion
-5. **Download + tag** — Saves clips as `.m4a` (Opus ~143kbps) and writes metadata (title, artist, genre, cover art)
+Transform songs from any Spotify playlist into original music:
 
-### Vocal refraction pipeline (Refrakt)
+1. **Research** the source track's musical character via Perplexity AI
+2. **Write refracted lyrics** — an AI agent creates completely new words that capture the same spirit
+3. **Generate vocal-aware style tags** — the suno-prompt agent places vocal descriptors (gender, tone, texture) for accurate voice generation
+4. **Name the song** — adversarial title/critic agents argue over the best title (max 2 rounds)
+5. **Submit to Suno AI** via browser automation, poll, download
+6. **Evaluate with Gemini** — AI listens to each track and scores genre match, mood, production, artistic merit
+7. **Tag + transcode** — MP3 (320kbps) for Apple Music, M4A for archival
 
-1. **Pick a track** from any Spotify playlist
-2. **Fetch original lyrics** from Genius
-3. **Research** the track's musical character via Perplexity AI
-4. **Generate style tags** — same Perplexity-powered synthesis as instrumentals
-5. **Write refracted lyrics** — an AI agent (Haiku) reads the original lyrics and writes completely new ones that capture the same spirit with fresh imagery
-6. **Generate + download + tag** — same Suno submission pipeline as above
+### Autonomous Album Pipeline (`/autonomous-album`)
 
-All generated metadata is credited to artist **"Refrakt"**.
+Create a full concept album from scratch — no human input needed:
+
+1. **Find a story** — Perplexity searches the news for compelling narratives
+2. **Design the soundtrack** — Save the Cat beat mapping, sonic palette research, lyrics for vocal tracks
+3. **Generate album art** — DALL-E 3 creates square + widescreen covers
+4. **Generate all tracks** via Suno, evaluate with Gemini, auto-select best versions
+5. **Package** — tag metadata, embed cover art, concatenate full album
+6. **Upload to YouTube** — create video, fill metadata, publish
+
+**~45 minutes from news headline to YouTube. ~$0.18 in API costs per album.**
 
 ## Project Structure
 
 ```
 Refrakt/
-├── bin/                        # CLI entry points (executable, no .py extension)
+├── bin/                        # CLI entry points
 │   ├── suno-generate           # Full pipeline: prompts -> browser -> poll -> download
 │   ├── refrakt                 # Vocal refraction pipeline
+│   ├── suno-fill-form          # Browser form fill helper
+│   ├── suno                    # Suno CLI: auth, credits, feed, poll, download
+│   ├── suno-tag                # M4A/MP3 metadata tagging
 │   ├── fetch-playlist          # Fetch Spotify playlist data
 │   ├── enrich-genres           # Enrich tracks with Last.fm genre tags
 │   ├── generate-prompts        # Research tracks + generate rich prompts
-│   ├── suno                    # Suno CLI: auth, credits, feed, poll, download
-│   ├── suno-tag                # M4A metadata tagging
 │   └── download-tracks         # Standalone clip downloader
 ├── lib/
-│   ├── suno.py                 # Suno API library (auth, feed, poll, download)
-│   ├── generate_prompts.py     # Perplexity research + prompt synthesis
-│   ├── refrakt.py              # Vocal refraction pipeline
+│   ├── suno.py                 # Suno API library (auth, feed, poll, download, transcode)
+│   ├── refrakt.py              # Vocal refraction pipeline (with playlist cache)
+│   ├── gemini_audio.py         # Gemini 2.5 Flash audio evaluation
+│   ├── dalle_art.py            # DALL-E 3 album art generation
 │   ├── perplexity.py           # Perplexity AI REST client
 │   ├── genius.py               # Genius lyrics fetcher
-│   ├── fetch_playlist.py       # Spotify playlist fetch
-│   ├── enrich_genres.py        # Last.fm genre enrichment
-│   ├── tag_tracks.py           # M4A metadata tagging (mutagen)
-│   └── download_tracks.py      # Audio download utility
+│   ├── generate_prompts.py     # Perplexity research + prompt synthesis
+│   ├── tag_tracks.py           # Metadata tagging (mutagen)
+│   └── ...
 ├── .claude/
 │   ├── agents/
-│   │   └── refrakt.md          # Haiku agent for lyric refraction
-│   ├── settings.json           # Claude Code permissions and hooks
-│   └── skills/                 # Claude Code skills (SKILL.md frontmatter)
-│       ├── suno-generate/
-│       ├── fetch-playlist/
-│       ├── enrich/
-│       ├── generate-prompts/
-│       ├── suno-status/
-│       ├── suno-download/
-│       └── suno-tag/
+│   │   ├── refrakt.md          # Haiku agent: write refracted lyrics
+│   │   ├── suno-prompt.md      # Haiku agent: generate vocal-aware style tags
+│   │   ├── song-title.md       # Haiku agent: generate creative song titles
+│   │   ├── song-critic.md      # Haiku agent: adversarial title evaluation
+│   │   └── code-reviewer.md    # Sonnet agent: security + quality code review
+│   └── skills/
+│       ├── autonomous-album/   # Full autonomous album pipeline
+│       ├── refrakt-soundtrack/  # Concept album creation
+│       ├── youtube-upload/     # YouTube browser automation
+│       ├── suno-generate/      # Interactive Suno generation
+│       └── ...
 ├── docs/
-│   ├── spotify-api-setup.md
-│   ├── spotify-api-research.md
-│   ├── suno-api-research.md
-│   └── lastfm-api-setup.md
-├── requirements.txt
-├── .gitignore
-├── .env                        # API credentials (gitignored)
-├── .suno_session.json          # Suno auth tokens (gitignored)
-└── output/                     # Downloaded audio (gitignored)
+│   ├── retrospectives/         # Album write-ups with learnings
+│   │   ├── alive-through-the-rift.md
+│   │   ├── full-circle.md
+│   │   └── images/
+│   ├── suno-vocal-prompting.md # Vocal tag reference guide
+│   └── ...
+├── output/                     # Generated audio (gitignored)
+│   ├── Alive Through the Rift/ # First concept album
+│   ├── Full Circle/            # Second concept album (autonomous)
+│   └── *.mp3 / *.m4a          # Individual refracted tracks
+└── requirements.txt
 ```
 
 ## Setup
@@ -75,108 +109,112 @@ Refrakt/
 ### Prerequisites
 
 - Python 3.10+
-- A Spotify Developer App (see [docs/spotify-api-setup.md](docs/spotify-api-setup.md))
-- A Last.fm API key (free — [register here](https://www.last.fm/api/account/create))
-- A Perplexity API key (for track research — [perplexity.ai](https://www.perplexity.ai))
-- A Genius API token (for lyrics — [genius.com/api-clients](https://genius.com/api-clients))
-- A Suno account (for generation)
-- `playwright-cli` installed (for browser automation)
+- `playwright-cli` (for browser automation)
+- API keys for: Spotify, Last.fm, Perplexity, Genius, Gemini, OpenAI (DALL-E)
+- A Suno Pro account (2,500 credits/month)
 
-### Install dependencies
+### Install
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-### Configure credentials
+### Configure
 
-Create a `.env` file in the project root:
+Create `.env` in the project root:
 
 ```
-SPOTIFY_CLIENT_ID=your_client_id
-SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
-LASTFM_API_KEY=your_lastfm_api_key
-PERPLEXITY_API_KEY=your_perplexity_api_key
-GENIUS_ACCESS_TOKEN=your_genius_token
+LASTFM_API_KEY=...
+PERPLEXITY_API_KEY=...
+GENIUS_ACCESS_TOKEN=...
+GEMINI_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
 ## Usage
 
-### Instrumental generation (end-to-end)
+### Quick start: refract a song
 
 ```bash
-bin/suno-generate --count 2              # generate 2 songs
-bin/suno-generate --count 5 --seed 42    # reproducible batch of 5
-bin/suno-generate --count 1 --no-download  # submit only, download later
+bin/refrakt --playlist "Rocket" --random
+# Then spawn agents for lyrics, tags, titles, and submit to Suno
 ```
 
-### Vocal refraction (Refrakt)
+### Create an autonomous album
 
 ```bash
-bin/refrakt --playlist "Rocket" --track "Retrovertigo"   # specific track
-bin/refrakt --playlist "Rocket" --random                  # random track
-bin/refrakt --playlist "Rocket" --list                    # browse tracks
-```
-
-After `bin/refrakt` generates the prompt data, spawn the Refrakt agent to write lyrics, then run `/suno-generate` to submit.
-
-### Individual pipeline steps
-
-```bash
-bin/fetch-playlist               # Fetch Spotify playlist data
-bin/enrich-genres                # Enrich with Last.fm genre tags
-bin/generate-prompts --count 10  # Research tracks + generate prompts
+# Run the /autonomous-album skill in Claude Code
+# It finds a news story, writes a soundtrack, generates everything, uploads to YouTube
 ```
 
 ### Suno operations
 
 ```bash
-bin/suno auth                    # Verify session and show user/credit info
-bin/suno credits                 # Show remaining credits
-bin/suno feed [--page N]         # List recent clips
-bin/suno poll <id> --wait        # Poll clip status until complete
-bin/suno download <id>...        # Download completed clips as .m4a
-```
-
-### Metadata tagging
-
-```bash
-bin/suno-tag --all               # Tag all .m4a files in output/
-bin/suno-tag --all --dry-run     # Preview without writing
-bin/suno-tag <clip_id> ...       # Tag specific clips
+bin/suno auth                    # Verify session
+bin/suno credits                 # Check balance
+bin/suno feed                    # List recent clips
+bin/suno download <id>...        # Download clips (M4A + MP3 transcode)
 ```
 
 ## How It Works
 
-### Title invention
+### AI Agent Pipeline
 
-Generated song titles are never derived from the original track name (to avoid Suno guard rails). Titles are invented to evoke a similar mood.
+The pipeline uses specialized Claude Code agents that work in sequence:
 
-Example: "Retrovertigo" by Mr. Bungle -> "Glass Cradle"
+1. **Refrakt agent** (Haiku) — writes completely original lyrics from source material
+2. **Suno-prompt agent** (Haiku) — generates vocal-aware style tags with gender/tone/texture
+3. **Song-title agent** (Haiku) — proposes 3 creative title candidates per track
+4. **Song-critic agent** (Haiku) — adversarial evaluation, approves or rejects with feedback
+5. **Code-reviewer agent** (Sonnet) — security/quality review before every git push
 
-### Perplexity-powered research
+### Quality Evaluation
 
-Each track is researched via Perplexity AI (sonar-pro model) to understand its sonic character — instrumentation, production style, tempo, mood, and cultural context. This research is synthesized into rich, descriptive Suno style tags rather than simple genre labels.
+After Suno generates music, **Gemini 2.5 Flash** listens to each track and evaluates:
+- Vocal contamination (for instrumental tracks)
+- Genre match against intended style tags
+- Mood alignment with the story beat
+- Production quality
+- Artistic interest
 
-### Download format
+Cost: ~$0.004 per track evaluation.
 
-All downloads use `.m4a` (Opus ~143kbps) over `.mp3` (64kbps) for higher quality.
+### Album Art
 
-Filename pattern: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
+**DALL-E 3** generates two versions:
+- Square (1024x1024) — embedded in MP3 metadata for Apple Music
+- Widescreen (1792x1024) — used for YouTube video thumbnail
+
+### Browser Automation
+
+Suno and YouTube don't have public APIs. The pipeline uses `playwright-cli` with a persistent browser profile for:
+- Suno form filling (via `bin/suno-fill-form` with Playwright's locator API)
+- YouTube Studio uploads (file input + metadata filling)
+
+The persistent profile ensures hCaptcha auto-passes on Suno without visual challenges.
 
 ## Status
 
-| Step | Status |
-|------|--------|
-| Fetch Spotify playlist data | Working |
-| Enrich tracks with Last.fm genre tags | Working |
+| Capability | Status |
+|-----------|--------|
+| Spotify playlist fetch + cache | Working |
+| Last.fm genre enrichment | Working |
 | Perplexity research + prompt generation | Working |
-| Vocal refraction (Refrakt pipeline) | Working |
-| Browser automation + poll + download | Working |
-| M4A metadata tagging (title, art, genre) | Working |
+| Vocal refraction (original lyrics) | Working |
+| Vocal-aware tag generation | Working |
+| Adversarial song naming | Working |
+| Suno browser submission + download | Working |
+| MP3 transcode (320kbps for Apple Music) | Working |
+| Gemini audio evaluation | Working |
+| DALL-E album art generation | Working |
+| Autonomous album creation | Working |
+| YouTube upload | Working |
+| Code review before push | Working |
 
-## Suno API
+## License
 
-Suno does not have an official public API. Generation uses reverse-engineered session cookie auth with hCaptcha as the main barrier. The pipeline uses `playwright-cli --headed --persistent` with a project-local browser profile — the invisible hCaptcha auto-passes without visual challenges. See [docs/suno-api-research.md](docs/suno-api-research.md) for full details.
+This is a personal project. The generated music is created via Suno AI and subject to their terms of service.

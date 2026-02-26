@@ -335,7 +335,28 @@ playwright-cli close
 
 ---
 
-## Phase 10 — Final Summary
+## Phase 10 — Write Retrospective
+
+Create `docs/retrospectives/<album-name-kebab>.md` documenting:
+
+1. **The inspiration** — what story/news was chosen and why
+2. **The sonic palette** — what genre fusion was designed and how it worked
+3. **The tracklist** — full table with titles, beats, and story moments
+4. **Vocal tracks** — the lyrics and their significance
+5. **Title generation** — notable titles and the critic's feedback
+6. **Technical learnings** — what worked, what broke, what to do differently
+7. **Album art** — the DALL-E prompt and the result
+
+Include:
+- Album cover image: convert to JPG, save to `docs/retrospectives/images/`, embed in markdown
+- YouTube link
+- Creation date and pipeline used
+
+This becomes a permanent record that visitors to the GitHub repo can read to understand how each album was made.
+
+---
+
+## Phase 11 — Final Summary
 
 Print a summary to the user:
 
