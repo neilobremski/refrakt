@@ -134,10 +134,17 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 ### In Progress / Next Steps
 - (none currently)
 
+### Generation Strategy
+- **3 prompt variations per song** — vary the first tag (position 1 carries ~50% weight), BPM, and structural metatags to force sonic diversity
+- Each variation generates 2 clips → **6 candidates total per song**
+- Audio-critic evaluates all 6 → auto-picks the best → copies to `output/YYYY-MM-DD/`
+- Cost: 30 credits per song (3 generations × 10 credits). Quality over quantity.
+- If all 6 candidates REJECT, auto-regen with adjusted tags (max 2 regen rounds)
+
 ### Scale Planning
-- 1341 tracks at 10 credits per generation = 13,410 credits total
-- Pro tier provides 2,500 credits/month (250 generations)
-- Full playlist would take ~6 months at Pro tier, or work in prioritized batches
+- 1341 tracks at 30 credits per generation = 40,230 credits total
+- Pro tier provides 2,500 credits/month (~83 songs)
+- Full playlist would take ~16 months at Pro tier, or work in prioritized batches
 
 ---
 
@@ -312,7 +319,12 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
 - Genre cache: `.lastfm_cache.json` (gitignored, auto-created by `enrich_genres.py`)
 - Research cache: `.prompt_research_cache.json` (gitignored, auto-created by `generate_prompts.py`)
 - Playlist cache: `.playlist_cache.json` (gitignored, 24-hour TTL, avoids Spotify rate limits)
-- Downloaded audio: `output/` (gitignored) — filename format: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
+- Temp audio (candidates): `SUNO_TEMP_DIR` (from `.env`, default `~/Google Drive/My Drive/SunoTemp/`)
+  - Structure: `SUNO_TEMP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
+  - All 6 candidates (3 prompt variations × 2 clips) go here
+  - Audio-critic evaluates, picks best, copies winner to `output/`
+- Final audio: `output/YYYY-MM-DD/{Title}.m4a` — clean filename, no timestamp prefix, no clip ID
+  - For albums: `output/{Album Name}/##_{Title}.m4a`
 - Suno session: `.suno_session.json` (gitignored)
 - Generated track tracking: `generated_tracks.json` (tracks which source tracks have been submitted)
 - Documentation: `docs/` with screenshots in `docs/images/`
