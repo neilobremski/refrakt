@@ -89,6 +89,11 @@ Rules for vocal track placement:
 - One vocal track for credits (last track — abstract, philosophical)
 - Additional vocal tracks only if the story demands it
 
+Rules for track count and variety:
+- **12 tracks is the sweet spot** — 16 risks filler, 8 feels rushed. Every track should carry narrative weight.
+- **Push for genre variation between tracks** — don't let the palette be too consistent. Action tracks should contrast strongly with intimate tracks.
+- **Plan for ~30-40 min total** — Suno generates 2-4 min per track. Don't promise 60 min.
+
 ### Step 2.2: Choose a Sonic Palette
 
 Use Perplexity MCP to research a genre fusion that matches the story's world:
@@ -260,14 +265,22 @@ from mutagen.id3 import ID3, TPE1, TPE2, TALB, TIT2, TRCK, TCON, APIC, TDRC
 ```
 Set: title, artist, album artist, album, track number (N/total), genre, year, cover art (square PNG).
 
-### Step 7.2: Create Full Album MP3
+### Step 7.2: Sanitize Filenames
 
-```bash
-# Build concat list
-ls album_dir/*.mp3 | sort | while read f; do echo "file '$f'"; done > /tmp/concat.txt
-# Concatenate
-ffmpeg -f concat -safe 0 -i /tmp/concat.txt -c copy "ALBUM (Full Album).mp3"
+Before concatenation, sanitize all filenames:
+- Replace curly apostrophes (`'`) with straight (`'`) — curly breaks ffmpeg concat paths
+- Remove or replace any characters that cause shell/path issues
+
+### Step 7.3: Create Full Album MP3
+
+**IMPORTANT**: Use Python to build the concat list (handles special chars in paths) and copy files to a temp dir with simple numeric names to avoid ffmpeg path issues. Re-encode rather than copy to avoid duration header bugs:
+
+```python
+# Copy to temp dir with safe names, then:
+ffmpeg -f concat -safe 0 -i concat.txt -c:a libmp3lame -b:a 320k "ALBUM (Full Album).mp3"
 ```
+
+Do NOT use `-c copy` — variable-bitrate MP3 concat with copy produces wrong duration headers.
 
 Tag the full album MP3 with metadata + cover art.
 
