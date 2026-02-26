@@ -58,7 +58,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - `lib/genius.py` — fetches original lyrics from Genius (free API, token in `.env` as `GENIUS_ACCESS_TOKEN`)
   - `.claude/agents/lyricist.md` — Haiku-powered agent that writes refracted lyrics (same spirit, completely new words)
   - Pipeline: `bin/refrakt` → spawn lyricist agent → `/suno-generate`
-  - Artist name on all generated metadata: **"Refrakt"**
+  - Artist name: read from `ARTIST_NAME` in `.env` (default: "Refrakt" if not set). Neil's is "Denumerator".
   - First refraction: "Glass Cradle" (refracted from "Retrovertigo" by Mr. Bungle, Rocket playlist)
 
 - Vocal character capture in Perplexity research
