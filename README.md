@@ -4,35 +4,37 @@ Original songs refracted from existing ones — plus fully autonomous concept al
 
 ## Albums
 
-### Alive Through the Rift
+<table>
+<tr>
+<td width="120"><a href="https://youtu.be/LJvS6sPLndI"><img src="docs/retrospectives/images/thirteen-billion-years-late-cover.jpg" width="100"></a></td>
+<td>
+<strong><a href="https://youtu.be/LJvS6sPLndI">Thirteen Billion Years Late</a></strong><br>
+12 tracks / 38:19 / Dark Ambient IDM + Noir Electronica + Post-Rock<br>
+<em>A radio astronomer finds a signal from an impossible distance — a galaxy that shouldn't exist.</em><br>
+<a href="docs/retrospectives/thirteen-billion-years-late.md">Retrospective</a>
+</td>
+</tr>
+<tr>
+<td><a href="https://youtu.be/JrWZt9jNG0o"><img src="docs/retrospectives/images/full-circle-cover.jpg" width="100"></a></td>
+<td>
+<strong><a href="https://youtu.be/JrWZt9jNG0o">Full Circle</a></strong><br>
+12 tracks / 27:27 / Lo-Fi Americana + Ambient Electronic + Cinematic Post-Rock<br>
+<em>Based on the true story of David Heavens, a homeless man who became a 91-year-old veteran's caregiver.</em><br>
+<a href="docs/retrospectives/full-circle.md">Retrospective</a>
+</td>
+</tr>
+<tr>
+<td><a href="https://youtu.be/Cn2W7uO-zls"><img src="docs/retrospectives/images/alive-through-the-rift-cover.jpg" width="100"></a></td>
+<td>
+<strong><a href="https://youtu.be/Cn2W7uO-zls">Alive Through the Rift</a></strong><br>
+16 tracks / 42:49 / Futuristic Blues + Industrial Rock<br>
+<em>A robot steps through an interdimensional rift, meets a human girl, and discovers what it means to be alive.</em><br>
+<a href="docs/retrospectives/alive-through-the-rift.md">Retrospective</a>
+</td>
+</tr>
+</table>
 
-[![Alive Through the Rift](docs/retrospectives/images/alive-through-the-rift-cover.jpg)](https://youtu.be/Cn2W7uO-zls)
-
-**16 tracks / 42:49 / Futuristic Blues + Industrial Rock**
-
-A post-apocalyptic robot adventurer steps through an interdimensional rift, meets a human girl, and discovers what it means to be alive. Mapped to the Save the Cat beat sheet.
-
-[Watch on YouTube](https://youtu.be/Cn2W7uO-zls) | [Read the retrospective](docs/retrospectives/alive-through-the-rift.md)
-
-### Full Circle
-
-[![Full Circle](docs/retrospectives/images/full-circle-cover.jpg)](https://youtu.be/JrWZt9jNG0o)
-
-**12 tracks / 27:27 / Lo-Fi Americana + Ambient Electronic + Cinematic Post-Rock**
-
-Based on the true story of David Heavens, a homeless man in Santa Monica who offered free help on a neighborhood app and became the caregiver and best friend of Frank, a 91-year-old Navy veteran. Created entirely by the autonomous pipeline.
-
-[Watch on YouTube](https://youtu.be/JrWZt9jNG0o) | [Read the retrospective](docs/retrospectives/full-circle.md)
-
-### Thirteen Billion Years Late
-
-[![Thirteen Billion Years Late](docs/retrospectives/images/thirteen-billion-years-late-cover.jpg)](https://youtu.be/LJvS6sPLndI)
-
-**12 tracks / 38:19 / Dark Ambient IDM + Noir Electronica + Post-Rock**
-
-A radio astronomer named Sable finds a coherent signal from an impossible distance — a galaxy that existed before the models said it could. Built from parallel research on 10 songs across two playlists plus 4 news stories, synthesized by a lead story-writing agent. First album with Gemini (Nano Banana) album art featuring integrated title text.
-
-[Watch on YouTube](https://youtu.be/LJvS6sPLndI) | [Read the retrospective](docs/retrospectives/thirteen-billion-years-late.md)
+All albums by **Denumerator**. Each links to YouTube (full album) and a retrospective with the story behind it.
 
 ---
 
