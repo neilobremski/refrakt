@@ -84,6 +84,33 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Bypasses shell escaping issues with multi-line lyrics — `json.dumps()` embeds content as JS string literals
   - Claude still handles browser open/cookies/mode switch/captcha/create click interactively
 
+- `.claude/agents/song-critic.md` — Haiku agent for adversarial title evaluation
+  - Evaluates title candidates against quality heuristics (image test, surprise test, sonic test, genre fit)
+  - Uses WebSearch for uniqueness checks (is this already a famous song?)
+  - Approves or rejects with specific feedback; max 2 rejection rounds
+  - Sequential pattern: song-title agent → song-critic agent → (repeat if rejected)
+- `.claude/agents/code-reviewer.md` — Sonnet agent for code review before pushing
+  - Reviews for security (credential exposure, shell injection), bugs, code quality, style
+  - Spawned before every `git push`; fix issues and re-run until CLEAR TO PUSH
+- `lib/gemini_audio.py` — Gemini 2.5 Flash audio evaluation for AI-powered music listening
+  - Uploads generated tracks to Gemini, gets structured JSON evaluation
+  - Checks: vocal contamination, genre match, mood match, production quality, artistic interest
+  - Verdict: Keep / Marginal / Regenerate with 1-5 scores
+  - Cost: ~$0.004/track; API key in `.env` as `GEMINI_API_KEY`
+  - Use `evaluate_track(audio_path, tags, mood, title, is_instrumental)` from Python
+- **Soundtrack creation** — original concept album workflow
+  - Define movie concept + story arc (Save the Cat / Hero's Journey beat mapping)
+  - 12-16 tracks with per-beat mood/tempo/genre tags, 1-2 vocal tracks
+  - Save tracklist intentions to `_tracklist.json` for re-generation reference
+  - Full pipeline: research palette → build prompts → title/critic agents → submit → Gemini eval → user picks A/B → tag → concat → YouTube
+  - First soundtrack: "Alive Through the Rift" by Denumerator (16 tracks, futuristic blues + industrial rock)
+- **YouTube upload** workflow via Playwright browser automation
+  - Create video from album: `ffmpeg -loop 1 -i cover.jpeg -i album.mp3 -c:v libx264 -tune stillimage -c:a aac -b:a 320k -pix_fmt yuv420p -shortest output.mp4`
+  - **Use 16:9 widescreen image (1920x1080) for YouTube** — square album art crops badly
+  - Generate tracklist with timestamps from individual MP3 durations
+  - Upload via youtube.com/studio: Create → Upload → fill title/description → set audience → Publish
+  - Persistent Playwright profile handles Google auth
+
 ### In Progress / Next Steps
 - (none currently)
 
