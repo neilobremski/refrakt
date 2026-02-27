@@ -376,6 +376,9 @@ def run_tag(entry, args):
             mp3 = MP3(mp3_path)
             if mp3.tags is None:
                 mp3.add_tags()
+            # Remove any existing APIC frames (e.g. from download-time tagging)
+            for key in [k for k in mp3.tags.keys() if k.startswith("APIC")]:
+                del mp3.tags[key]
             mime = "image/png" if cover_path.endswith(".png") else "image/jpeg"
             mp3.tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=cover_data))
             mp3.save()
