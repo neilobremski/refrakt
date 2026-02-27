@@ -21,6 +21,13 @@ import librosa
 import numpy as np
 from pathlib import Path
 
+# Essentia is optional — used for enhanced fade detection and dynamic complexity
+try:
+    import essentia.standard as es
+    HAS_ESSENTIA = True
+except ImportError:
+    HAS_ESSENTIA = False
+
 
 # --- Feature Extraction ---
 
@@ -184,8 +191,75 @@ def analyze_structure(audio_path, n_segments=6):
     return {
         "avg_section_similarity": avg_sim,
         "num_sections": len(segment_features),
-        "is_looped": avg_sim > 0.92,
+        "is_looped": bool(avg_sim > 0.92),
     }
+
+
+# --- Essentia Enhanced Analysis ---
+
+def _essentia_load(audio_path):
+    """Load audio via essentia's MonoLoader, falling back to MP3 companion if M4A fails.
+
+    Essentia's MonoLoader crashes (SIGABRT) on Opus-in-M4A containers from Suno.
+    If the input is .m4a and a .mp3 companion exists, use that instead.
+    """
+    path = str(audio_path)
+    if path.endswith(".m4a"):
+        mp3_path = path.replace(".m4a", ".mp3")
+        if Path(mp3_path).exists():
+            path = mp3_path
+    return es.MonoLoader(filename=path, sampleRate=44100)()
+
+
+def detect_fade(audio_path):
+    """Use Essentia's FadeDetection for proper fade-out detection.
+
+    More accurate than RMS heuristics for distinguishing natural endings
+    from truncation. Returns None if essentia is not installed.
+    """
+    if not HAS_ESSENTIA:
+        return None
+
+    try:
+        audio = _essentia_load(audio_path)
+        fade = es.FadeDetection(minLength=1.5, cutoffHigh=0.85, cutoffLow=0.2)
+        fade_in, fade_out = fade(audio)
+
+        duration = len(audio) / 44100.0
+        has_fade_out = len(fade_out) > 0
+        late_fade = any(fo[0] > duration - 10.0 for fo in fade_out) if has_fade_out else False
+
+        return {
+            "has_fade_out": has_fade_out,
+            "late_fade_out": late_fade,
+            "fade_out_count": len(fade_out),
+            "duration": float(duration),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def measure_dynamic_complexity(audio_path):
+    """Use Essentia's DynamicComplexity for loudness fluctuation analysis.
+
+    Better than simple dB range — measures actual loudness variation over time.
+    Returns None if essentia is not installed.
+    """
+    if not HAS_ESSENTIA:
+        return None
+
+    try:
+        audio = _essentia_load(audio_path)
+        dc = es.DynamicComplexity()
+        complexity, loudness = dc(audio)
+
+        return {
+            "dynamic_complexity": float(complexity),
+            "loudness_db": float(loudness),
+            # Typical: 2-8 for pop/electronic, <2 for static/droning
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # --- Batch Similarity ---
@@ -232,12 +306,23 @@ def analyze_track(audio_path):
     variety = measure_variety(path)
     structure = analyze_structure(path)
 
-    return {
+    report = {
         "file": Path(path).name,
         "truncation": truncation,
         "variety": variety,
         "structure": structure,
     }
+
+    # Essentia enhancements (optional — gracefully absent)
+    fade = detect_fade(path)
+    if fade:
+        report["fade_detection"] = fade
+
+    dynamics = measure_dynamic_complexity(path)
+    if dynamics:
+        report["dynamic_complexity"] = dynamics
+
+    return report
 
 
 def full_critique(audio_path, tags="", is_instrumental=True, expected_duration=None):
@@ -303,6 +388,20 @@ def full_critique(audio_path, tags="", is_instrumental=True, expected_duration=N
     if s["is_looped"]:
         issues.append(f"LOOPED: Section similarity {s['avg_section_similarity']:.2f} — "
                       f"track is essentially one section repeated")
+
+    # Essentia: fade detection (strengthens truncation verdict)
+    fade = report.get("fade_detection")
+    if fade and not fade.get("error"):
+        if dur >= 450 and not fade["has_fade_out"]:
+            issues.append(f"NO FADE-OUT: Track is {dur_display} with no detected fade — "
+                          f"likely truncated")
+
+    # Essentia: dynamic complexity
+    dc = report.get("dynamic_complexity")
+    if dc and not dc.get("error"):
+        if dc["dynamic_complexity"] < 2.0 and "ambient" not in tags_lower and "drone" not in tags_lower:
+            issues.append(f"STATIC: Dynamic complexity {dc['dynamic_complexity']:.1f} — "
+                          f"track lacks dynamic movement (typical: 2-8 for pop/electronic)")
 
     # Context-aware checks
     tags_lower = tags.lower()

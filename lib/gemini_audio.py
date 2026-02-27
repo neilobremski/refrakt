@@ -99,7 +99,10 @@ Listen carefully to this track and evaluate:
 2. GENRE MATCH: Does this track match the intended style tags above? Rate 1-5 and explain briefly.
 3. MOOD MATCH: Does the emotional character match the intended mood? Rate 1-5 and explain.
 4. PRODUCTION QUALITY: Is the audio clean, well-mixed, dynamic? Any artifacts, clipping, abrupt cuts? Rate 1-5.
-5. ARTISTIC INTEREST: Is this track musically interesting and non-generic? Does it have character? Rate 1-5.{lyrics_check}
+5. ARTISTIC INTEREST: Is this track musically interesting and non-generic? Does it have distinctive character that would make someone remember it, or does it sound like generic royalty-free stock music? Consider: are the sounds unique or default presets? Is the arrangement predictable or surprising? Rate 1-5.{lyrics_check}
+6. ENDING QUALITY: Does the track end naturally (fade out, musical resolution, intentional silence) or does it cut off abruptly mid-phrase? If it cuts off, does it sound like the track was truncated/cropped?
+7. INSTRUMENTS: What specific instruments or sounds can you identify? List them (e.g., "electric guitar, 808 bass, hi-hats, pad synth, vocal chops").
+8. DESCRIPTION: In 2-3 sentences, describe what this track sounds like to a listener who hasn't heard it. Include tempo feel, energy arc, key sonic textures, and emotional character.
 
 Respond ONLY with valid JSON in this exact format (no markdown, no code fences):
 {{
@@ -113,6 +116,10 @@ Respond ONLY with valid JSON in this exact format (no markdown, no code fences):
   "production_notes": "brief explanation",
   "artistic_interest": 1-5,
   "artistic_notes": "brief explanation",
+  "ending_quality": "natural" or "abrupt" or "truncated",
+  "ending_notes": "brief explanation",
+  "instruments": ["list", "of", "instruments", "detected"],
+  "description": "2-3 sentence sonic description of the track",
   "overall_score": 1-5,
   "verdict": "Keep" or "Regenerate" or "Marginal",
   "summary": "One sentence overall impression"
