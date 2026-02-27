@@ -63,16 +63,27 @@ Gemini takes 30-90 seconds. Use `sleep 30` then take a snapshot. Look for `"Down
 
 ### 5. Download Square Image
 
-Click the "Download full size image" button ref from the snapshot. Then find the downloaded file:
+**How downloads work:** When you `playwright-cli click` a download button, Playwright automatically intercepts the download and saves it to `.playwright-cli/` in the current working directory. The CLI output will say `"Downloaded file X to .playwright-cli/X"`. You do NOT need `run-code` or `page.waitForEvent('download')`.
 
+**Step-by-step:**
+
+1. **Before clicking**, record existing Gemini PNG files so you can identify the new one:
 ```bash
-sleep 3
-find .playwright-cli/ -name "Gemini*.png" -type f
+ls .playwright-cli/Gemini-Generated-Image-*.png 2>/dev/null
 ```
 
-Downloaded files appear in `.playwright-cli/` (NOT `.refrakt/playwright-cli/`).
+2. **Click the download button** using its ref from the snapshot. Read the CLI output — it will confirm the download path:
+```bash
+playwright-cli click <REF>
+```
 
-**Verify dimensions** before moving — Gemini square images should be ~2048x2048:
+3. **Wait briefly** for the file to finish saving, then find it:
+```bash
+sleep 5
+ls -t .playwright-cli/Gemini-Generated-Image-*.png | head -1
+```
+
+4. **Verify dimensions** before moving — Gemini square images should be ~2048x2048:
 ```bash
 .venv/bin/python -c "
 import struct, os
@@ -89,10 +100,12 @@ print(f'{w}x{h}, {os.path.getsize(\"<FILE>\")//1024}KB')
 
 If dimensions are 1024x1024, something went wrong (that's DALL-E size). Retry the generation.
 
-Move immediately:
+5. **Move immediately** (Playwright reuses filenames and silently overwrites):
 ```bash
-mv ".playwright-cli/Gemini-Generated-Image-*.png" "<output_dir>/cover.png"
+mv "<downloaded_file>" "<output_dir>/cover.png"
 ```
+
+**CRITICAL: Do NOT use `playwright-cli run-code` with `page.waitForEvent('download')` — it is unreliable with Gemini's blob URL mechanism. Just use `playwright-cli click` and the file auto-saves to `.playwright-cli/`.**
 
 ### 6. Generate Widescreen Image (16:9) — Album Format Only
 
@@ -102,7 +115,7 @@ mv ".playwright-cli/Gemini-Generated-Image-*.png" "<output_dir>/cover.png"
 Generate an image: Create a WIDESCREEN LANDSCAPE image that is much wider than it is tall, like a YouTube banner (approximately 2752 pixels wide by 1536 pixels tall). Same composition and style as the previous image. Include the text "[TITLE]" and "[ARTIST]". The image MUST be wider than it is tall - landscape orientation, not square.
 ```
 
-Wait, download, verify dimensions (should be wider than tall, e.g. 2752x1536 or 3168x1344), and move to `<output_dir>/cover-wide.png`.
+Wait for generation, then download using the same click-and-find method from Step 5. Verify dimensions (should be wider than tall, e.g. 2752x1536 or 3168x1344), and move to `<output_dir>/cover-wide.png`.
 
 If the result is still square, retry with even more emphasis on "WIDESCREEN LANDSCAPE, NOT SQUARE".
 
@@ -119,6 +132,7 @@ Leave the browser open — other agents or the user may need it.
 ## Important Rules
 
 - **ONLY use Gemini via Playwright browser automation.** No DALL-E. No Gemini API. No `lib/dalle_art.py`. No `lib/gemini_image.py`. Browser only.
+- **Never use `run-code` with `page.waitForEvent('download')`** — it is unreliable with Gemini. Just `playwright-cli click <ref>` and find the file in `.playwright-cli/`.
 - **Never read generated images with Claude's Read tool** — they are >2000px and will break context. Use file metadata commands only (`ls -la`, `file`, `.venv/bin/python` for dimensions).
 - **Move files immediately after download** — Playwright reuses filenames and silently overwrites.
 - **One conversation = one art session** — generating square then widescreen in the same Gemini conversation maintains style consistency.
