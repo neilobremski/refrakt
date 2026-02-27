@@ -197,12 +197,16 @@ Use Playwright to interact with Gemini's image generation:
 
 1. Open Gemini in persistent browser: `playwright-cli open --headed --persistent --profile=.playwright-profile "https://gemini.google.com"`
 2. User selects "Thinking" model from dropdown
-3. Type the art prompt requesting **widescreen 16:9** aspect ratio first
-4. Wait for generation, download via "Download full size image" button
-5. Ask Gemini to regenerate in **square 1:1** aspect ratio with same composition
-6. Download the square version
+3. **Prefix ALL image prompts with "Generate an image:"** — without this prefix, the Thinking model analyzes/discusses rather than generating
+4. Request **square 1:1** with title text included in the prompt
+5. Wait ~60s for generation, download via "Download full size image" button
+6. **Immediately move** downloaded file from `.playwright-cli/` to SunoTemp with meaningful name — Playwright reuses filenames and will silently overwrite/cache
+7. Ask Gemini to regenerate in **widescreen 16:9** aspect ratio with same composition
+8. Download and move the widescreen version
 
-**IMPORTANT:** Gemini images are ~2048-2752px. Never read them with Claude's Read tool (breaks context >2000px). Use accessibility snapshots only.
+**IMPORTANT:**
+- Gemini images are ~2048-2752px. Never read them with Claude's Read tool (breaks context >2000px). Use accessibility snapshots only.
+- After embedding cover art, **verify with hash comparison** that the correct image was used.
 
 ### Step 4.3: Add Title Text
 
