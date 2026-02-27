@@ -267,6 +267,12 @@ rf status                                              # show current pipeline s
 rf list --playlist "NeilPop" --not-generated            # list tracks not yet processed
 rf credits                                             # Suno credits remaining
 
+# Pipeline notes:
+# - Art (Gemini) and submit (Suno) share the same Playwright profile — run art FIRST, then submit
+# - For instrumentals: after select, set make_instrumental=true, clear original_lyrics,
+#   write structural metatags to prompt, mark lyrics+lyrics-review done, then rf run --resume
+# - Perplexity research can match wrong artist — provide context to producer agent if needed
+
 # Legacy full pipeline (end-to-end: prompts -> browser -> poll -> download)
 bin/suno-generate --count 2              # generate 2 songs (instrumental only)
 bin/suno-generate --count 5 --seed 42    # reproducible batch of 5
