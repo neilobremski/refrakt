@@ -68,7 +68,7 @@ Save to `_youtube_description.txt` in the album folder.
 
 ### Open YouTube Studio
 ```bash
-playwright-cli open --headed --persistent --profile=.playwright-profile "https://studio.youtube.com"
+playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://studio.youtube.com"
 ```
 User logs in if needed. Wait for dashboard.
 

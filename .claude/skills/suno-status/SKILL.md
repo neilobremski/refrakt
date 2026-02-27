@@ -21,7 +21,7 @@ bin/suno poll <id> --wait  # Poll clip status until complete
 
 ## Prerequisites
 
-- `.suno_session.json` must exist with valid `session_id`, `client_token`, and `django_session_id`
+- `.refrakt/suno_session.json` must exist with valid `session_id`, `client_token`, and `django_session_id`
 
 ## Credit math
 

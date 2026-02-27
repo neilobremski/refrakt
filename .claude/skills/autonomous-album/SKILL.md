@@ -66,7 +66,7 @@ bin/suno auth
 .venv/bin/python -c "from lib.gemini_audio import _load_api_key; print('Gemini OK:', bool(_load_api_key()))"
 
 # 4. Verify Playwright persistent profile exists (for Gemini art + Suno submission)
-ls .playwright-profile/Default/Preferences > /dev/null && echo "Playwright profile OK"
+ls .refrakt/playwright-profile/Default/Preferences > /dev/null && echo "Playwright profile OK"
 ```
 
 If any check fails, alert the user and stop. Do NOT proceed with a partial pipeline.
@@ -195,12 +195,12 @@ Based on the story and tracklist, write a detailed image generation prompt descr
 
 Use Playwright to interact with Gemini's image generation:
 
-1. Open Gemini in persistent browser: `playwright-cli open --headed --persistent --profile=.playwright-profile "https://gemini.google.com"`
+1. Open Gemini in persistent browser: `playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://gemini.google.com"`
 2. User selects "Thinking" model from dropdown
 3. **Prefix ALL image prompts with "Generate an image:"** — without this prefix, the Thinking model analyzes/discusses rather than generating
 4. Request **square 1:1** with title text included in the prompt
 5. Wait ~60s for generation, download via "Download full size image" button
-6. **Immediately move** downloaded file from `.playwright-cli/` to SunoTemp with meaningful name — Playwright reuses filenames and will silently overwrite/cache
+6. **Immediately move** downloaded file from `.refrakt/playwright-cli/` to SunoTemp with meaningful name — Playwright reuses filenames and will silently overwrite/cache
 7. Ask Gemini to regenerate in **widescreen 16:9** aspect ratio with same composition
 8. Download and move the widescreen version
 
@@ -218,7 +218,7 @@ Ask Gemini to add album title + artist name to both images:
 
 ### Step 4.4: Save to Album Folder
 
-Copy images from `.playwright-cli/` to `output/ALBUM_NAME/`:
+Copy images from `.refrakt/playwright-cli/` to `output/ALBUM_NAME/`:
 - `cover.png` — square with title (for MP3 metadata)
 - `cover-wide.png` — widescreen with title (for YouTube video)
 
@@ -229,10 +229,10 @@ Copy images from `.playwright-cli/` to `output/ALBUM_NAME/`:
 ### Step 5.1: Open Browser
 
 ```bash
-playwright-cli open --headed --persistent --profile=.playwright-profile "https://suno.com/create"
+playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://suno.com/create"
 ```
 
-Inject session cookies from `.suno_session.json`, reload.
+Inject session cookies from `.refrakt/suno_session.json`, reload.
 
 ### Step 5.2: Submit Each Track
 
@@ -372,7 +372,7 @@ Save to `_youtube_description.txt`.
 ### Step 9.1: Open YouTube Studio
 
 ```bash
-playwright-cli open --headed --persistent --profile=.playwright-profile "https://studio.youtube.com"
+playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://studio.youtube.com"
 ```
 
 If not logged in, alert user and wait. This is the ONE required human interaction.

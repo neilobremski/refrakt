@@ -240,23 +240,49 @@ def analyze_track(audio_path):
     }
 
 
-def full_critique(audio_path, tags="", is_instrumental=True):
+def full_critique(audio_path, tags="", is_instrumental=True, expected_duration=None):
     """Generate a human-readable critique with pass/fail flags.
+
+    Args:
+        audio_path: path to .m4a or .mp3 file
+        tags: Suno style tags string (for context-aware checks)
+        is_instrumental: True if no vocals expected
+        expected_duration: optional target duration in seconds. If None, uses
+            sensible defaults (120s min for standard tracks, 90s for intros/outros)
 
     Returns dict with 'issues' list and 'verdict' (pass/warn/fail).
     """
     report = analyze_track(audio_path)
     issues = []
 
-    # Truncation
+    # Truncation (too long)
     if report["truncation"].get("truncated"):
         issues.append(f"TRUNCATED: Track cut off at {report['truncation']['duration_display']} "
                       f"(Suno 8-min limit). Confidence: {report['truncation']['confidence']:.0%}")
 
-    # Duration warning
     dur = report["truncation"]["duration_seconds"]
+    dur_display = report["truncation"]["duration_display"]
+
     if dur >= 470 and not report["truncation"].get("truncated"):
-        issues.append(f"DURATION WARNING: {report['truncation']['duration_display']} — dangerously close to 8-min limit")
+        issues.append(f"DURATION WARNING: {dur_display} — dangerously close to 8-min limit")
+
+    # Duration check (too short)
+    tags_lower = tags.lower()
+
+    if expected_duration is not None:
+        # Explicit target — flag if less than 60% of expected
+        if dur < expected_duration * 0.6:
+            issues.append(f"SHORT: {dur_display} is only {dur/expected_duration:.0%} of "
+                          f"expected {int(expected_duration//60)}:{int(expected_duration%60):02d}")
+    else:
+        # Heuristic thresholds based on context
+        # Intro/outro segments can be shorter
+        is_intro_outro = any(w in tags_lower for w in ["intro", "outro", "interlude", "transition"])
+        min_duration = 90 if is_intro_outro else 120  # 1:30 for intros, 2:00 for standard
+
+        if dur < min_duration:
+            issues.append(f"SHORT: {dur_display} — under {min_duration//60}:{min_duration%60:02d} minimum "
+                          f"{'(intro/outro threshold)' if is_intro_outro else '(standard track threshold)'}")
 
     # Low variety (generic loop)
     v = report["variety"]
@@ -288,6 +314,7 @@ def full_critique(audio_path, tags="", is_instrumental=True):
     # Verdict
     critical = [i for i in issues if i.startswith(("TRUNCATED", "LOOPED"))]
     warnings = [i for i in issues if not i.startswith(("TRUNCATED", "LOOPED"))]
+    # SHORT on its own is a WARN, but SHORT + another warning = stronger signal
 
     if critical:
         verdict = "FAIL"

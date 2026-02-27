@@ -12,7 +12,7 @@ Usage:
     .venv/bin/python download_tracks.py <clip_id> [<clip_id> ...]
     .venv/bin/python download_tracks.py        # uses DEFAULT_CLIP_IDS below
 
-Auth is read from .suno_session.json (see .gitignore).
+Auth is read from .refrakt/suno_session.json (see .gitignore).
 The JWT is auto-refreshed via the Clerk token endpoint.
 """
 
@@ -26,7 +26,7 @@ from pathlib import Path
 import requests
 
 _BASE_DIR = Path(__file__).parent.parent
-SESSION_FILE = str(_BASE_DIR / ".suno_session.json")
+SESSION_FILE = str(_BASE_DIR / ".refrakt" / "suno_session.json")
 OUTPUT_DIR = str(_BASE_DIR / "output")
 
 # Hardcoded clip IDs from the initial test generation (2026-02-24).

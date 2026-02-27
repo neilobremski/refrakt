@@ -19,11 +19,11 @@ When invoked:
 
 **Credential exposure:**
 - [ ] `.env` is NOT staged or committed (`git status` should show it only as untracked/ignored)
-- [ ] `.suno_session.json` is NOT staged or committed
+- [ ] `.refrakt/suno_session.json` is NOT staged or committed
 - [ ] `playlist_data.json`, `prompts_data.json`, `generated_tracks.json` are NOT staged
 - [ ] No hardcoded API keys, tokens, JWTs, or passwords in any source file
 - [ ] No `print()` or `logging` calls that output `client_token`, `django_session_id`, API keys, or JWT content
-- [ ] `.playwright-profile/` directory is NOT staged
+- [ ] `.refrakt/playwright-profile/` directory is NOT staged
 
 **Shell injection:**
 - [ ] All `subprocess.run()` calls use list form (NOT `shell=True` with concatenated user input)

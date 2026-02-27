@@ -46,6 +46,6 @@ bin/suno-tag 0492fab7 46ba57f9
 
 ## Prerequisites
 
-- `.suno_session.json` with valid session (for feed API access)
+- `.refrakt/suno_session.json` with valid session (for feed API access)
 - `mutagen` installed in `.venv` (`pip install mutagen`)
 - `prompts_data.json` (optional — for source track descriptions)

@@ -17,7 +17,7 @@ Enriches `playlist_data.json` with genre tags from the Last.fm API.
 3. Queries Last.fm `artist.getTopTags` for each artist not already cached
 4. Filters out non-genre tags (personal tags, star ratings, years)
 5. Writes genre tags back to each track in `playlist_data.json`
-6. Caches results to `.lastfm_cache.json` (safe to interrupt and re-run)
+6. Caches results to `.refrakt/caches/lastfm.json` (safe to interrupt and re-run)
 
 ## Command
 

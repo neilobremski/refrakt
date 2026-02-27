@@ -31,7 +31,7 @@ BASE_DIR = Path(__file__).parent.parent
 PLAYLIST_FILE = BASE_DIR / "playlist_data.json"
 PROMPTS_FILE = BASE_DIR / "prompts_data.json"
 GENERATED_FILE = BASE_DIR / "generated_tracks.json"
-RESEARCH_CACHE_FILE = BASE_DIR / ".prompt_research_cache.json"
+RESEARCH_CACHE_FILE = BASE_DIR / ".refrakt" / "caches" / "prompt_research.json"
 
 # Suno model
 SUNO_MODEL = "chirp-crow"
@@ -107,6 +107,7 @@ def load_research_cache() -> dict:
 
 def save_research_cache(cache: dict) -> None:
     """Write the research cache to disk."""
+    RESEARCH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(RESEARCH_CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
 

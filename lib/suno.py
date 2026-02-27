@@ -2,7 +2,7 @@
 """
 suno.py — Swiss army knife CLI for the Refrakt pipeline.
 
-Auth is read from .suno_session.json (gitignored).
+Auth is read from .refrakt/suno_session.json (gitignored).
 
 Usage:
     .venv/bin/python suno.py <command> [args...]
@@ -40,7 +40,7 @@ import requests
 # ---------------------------------------------------------------------------
 
 _BASE_DIR = Path(__file__).parent.parent
-SESSION_FILE = str(_BASE_DIR / ".suno_session.json")
+SESSION_FILE = str(_BASE_DIR / ".refrakt" / "suno_session.json")
 OUTPUT_DIR = str(_BASE_DIR / "output")
 AUTH_BASE = "https://auth.suno.com"
 API_BASE = "https://studio-api.prod.suno.com"

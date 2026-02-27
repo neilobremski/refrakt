@@ -1,7 +1,8 @@
 .env
 .cache
-.lastfm_cache.json
-.suno_session.json
+.refrakt/
+.playwright-cli/
+.playwright-profile/
 .venv/
 __pycache__/
 *.pyc
@@ -11,9 +12,5 @@ prompts_data.json
 generated_tracks.json
 *.png
 .DS_Store
-.prompt_research_cache.json
-.playwright-cli/
-.playwright-profile/
 .claude/settings.local.json
-.playlist_cache.json
 _*

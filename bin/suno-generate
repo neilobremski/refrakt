@@ -60,7 +60,7 @@ import random
 # ---------------------------------------------------------------------------
 
 SUNO_CREATE_URL = "https://suno.com/create"
-PROFILE_DIR = str(PROJECT_ROOT / ".playwright-profile")
+PROFILE_DIR = str(PROJECT_ROOT / ".refrakt" / "playwright-profile")
 POLL_INTERVAL = 5
 CAPTCHA_TIMEOUT = 300  # 5 minutes
 GENERATION_WAIT = 12   # seconds between Create clicks

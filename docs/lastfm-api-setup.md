@@ -58,7 +58,7 @@ GET https://ws.audioscrobbler.com/2.0/
     &autocorrect=1
 ```
 
-This returns the top genre/style tags for an artist. The API is free with no hard rate limit, but Last.fm asks that you stay under ~5 requests/second. Our `enrich_genres.py` script uses a 0.2s delay between requests and caches results to `.lastfm_cache.json`.
+This returns the top genre/style tags for an artist. The API is free with no hard rate limit, but Last.fm asks that you stay under ~5 requests/second. Our `enrich_genres.py` script uses a 0.2s delay between requests and caches results to `.refrakt/caches/lastfm.json`.
 
 ## Rate limits
 

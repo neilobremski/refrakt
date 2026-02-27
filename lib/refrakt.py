@@ -41,8 +41,8 @@ BASE_DIR = _LIB_DIR.parent
 load_dotenv(BASE_DIR / ".env")
 
 PROMPTS_FILE = BASE_DIR / "prompts_data.json"
-RESEARCH_CACHE_FILE = BASE_DIR / ".prompt_research_cache.json"
-PLAYLIST_CACHE_FILE = BASE_DIR / ".playlist_cache.json"
+RESEARCH_CACHE_FILE = BASE_DIR / ".refrakt" / "caches" / "prompt_research.json"
+PLAYLIST_CACHE_FILE = BASE_DIR / ".refrakt" / "caches" / "playlist.json"
 PLAYLIST_CACHE_TTL = 24 * 60 * 60  # 24 hours in seconds
 
 SUNO_MODEL = "chirp-crow"
@@ -113,6 +113,7 @@ def _load_playlist_cache():
 
 def _save_playlist_cache(cache):
     try:
+        PLAYLIST_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = PLAYLIST_CACHE_FILE.with_suffix(".tmp")
         with open(tmp, "w") as f:
             json.dump(cache, f, indent=2, ensure_ascii=False)
@@ -218,6 +219,7 @@ def load_research_cache():
 
 def save_research_cache(cache):
     try:
+        RESEARCH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(RESEARCH_CACHE_FILE, "w") as f:
             json.dump(cache, f, indent=2, ensure_ascii=False)
     except OSError as e:

@@ -97,16 +97,16 @@ This is the core interactive phase. You will control the browser step-by-step us
 ### 3.1 — Open Browser
 
 ```bash
-playwright-cli open --headed --persistent --profile=.playwright-profile "https://suno.com/create"
+playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://suno.com/create"
 ```
 
-**Important:** Always use `--headed --persistent --profile=.playwright-profile`. The persistent profile avoids hCaptcha visual challenges. Without `--persistent`, hCaptcha will show image grids that block submission.
+**Important:** Always use `--headed --persistent --profile=.refrakt/playwright-profile`. The persistent profile avoids hCaptcha visual challenges. Without `--persistent`, hCaptcha will show image grids that block submission.
 
 Wait a few seconds for the page to load.
 
 ### 3.2 — Inject Session Cookies
 
-Read `.suno_session.json` to get `client_token` and `django_session_id`, then set cookies:
+Read `.refrakt/suno_session.json` to get `client_token` and `django_session_id`, then set cookies:
 
 ```bash
 playwright-cli cookie-set __client "<client_token>" --domain=.suno.com --path=/ --secure --httpOnly
@@ -299,7 +299,7 @@ The persistent profile may have been cleared. Try:
 3. Future sessions should auto-pass again
 
 ### Session expired
-If you get auth errors after cookie injection, the session tokens in `.suno_session.json` may be stale. The user will need to update them.
+If you get auth errors after cookie injection, the session tokens in `.refrakt/suno_session.json` may be stale. The user will need to update them.
 
 ### Form fields don't clear
 If `fill` doesn't replace existing text, try clicking the field first (`click <ref>`), selecting all (`press Control+a`), then typing:
@@ -322,7 +322,7 @@ Suno uses React components, not raw HTML `<input>`/`<textarea>` elements. Key fi
 
 ## Prerequisites
 
-- `.suno_session.json` with valid `client_token` and `django_session_id`
+- `.refrakt/suno_session.json` with valid `client_token` and `django_session_id`
 - `playlist_data.json` enriched with genres (run `/enrich` first)
 - `playwright-cli` installed and in PATH
 - `bin/` scripts on PATH (handled by SessionStart hook)

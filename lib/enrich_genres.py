@@ -8,7 +8,7 @@ For each unique artist in the playlist, queries Last.fm's artist.getTopTags
 endpoint and stores the top genre tags. Those tags are then written back to
 every matching track as a `genres` list field.
 
-Results are cached to .lastfm_cache.json so the script is safe to re-run
+Results are cached to .refrakt/caches/lastfm.json so the script is safe to re-run
 without hammering the API.
 
 Usage:
@@ -36,7 +36,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 BASE_DIR = Path(__file__).parent.parent
 INPUT_FILE = BASE_DIR / "playlist_data.json"
 OUTPUT_FILE = BASE_DIR / "playlist_data.json"  # in-place update
-CACHE_FILE = BASE_DIR / ".lastfm_cache.json"
+CACHE_FILE = BASE_DIR / ".refrakt" / "caches" / "lastfm.json"
 
 # ---------------------------------------------------------------------------
 # Last.fm config
@@ -131,6 +131,7 @@ def load_cache() -> dict:
 
 def save_cache(cache: dict) -> None:
     """Persist the cache to disk."""
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
 

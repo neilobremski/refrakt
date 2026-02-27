@@ -23,11 +23,11 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Output: `playlist_data.json` (gitignored)
   - Uses `/items` endpoint (newer; `/tracks` is deprecated and 403s)
 - `enrich_genres.py` working — enriches tracks with Last.fm genre tags
-  - Queries `artist.getTopTags` for each unique artist, caches to `.lastfm_cache.json`
+  - Queries `artist.getTopTags` for each unique artist, caches to `.refrakt/caches/lastfm.json`
   - Filters out non-genre tags (personal tags, ratings, years)
   - Updates `playlist_data.json` in-place with `genres` field per track
 - Suno session authentication confirmed working
-  - Session stored in `.suno_session.json` (gitignored)
+  - Session stored in `.refrakt/suno_session.json` (gitignored)
   - JWT refresh via Clerk confirmed working
 - First test generation completed: 2 clips generated, downloaded to `output/`
   - Note: test clips used the original track name ("Semi Detached") — future generations must use invented titles per the title convention below
@@ -47,7 +47,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Auto-tags on download via `bin/suno download`; retro-tag with `bin/suno-tag --all`
 - Per-track Perplexity AI research for prompt generation
   - `lib/perplexity.py` — REST API client for Perplexity (sonar-pro model)
-  - Phase 1: Research each track's musical character via Perplexity (cached to `.prompt_research_cache.json`)
+  - Phase 1: Research each track's musical character via Perplexity (cached to `.refrakt/caches/prompt_research.json`)
   - Phase 2: Synthesize research into rich descriptive Suno tags (120-200 chars with sonic textures, mood, BPM)
   - Structural metatags in Lyrics field (`[Intro]\n[Slow Build]\n...`) based on genre/duration
   - Negative tags always set to `"vocals, singing, voice, spoken word"` for instrumental tracks
@@ -180,14 +180,14 @@ Stored in `.env` (gitignored). Do not commit. Do not print or log.
 ### Authentication (Confirmed Working)
 
 Suno uses Clerk for auth. Two token layers:
-1. `__client` — long-lived JWT in `.suno_session.json` (expires ~2027)
+1. `__client` — long-lived JWT in `.refrakt/suno_session.json` (expires ~2027)
 2. Short-lived JWT — refreshed per-request via Clerk
 
 **JWT Refresh (confirmed pattern):**
 ```python
 import requests, json
 
-with open(".suno_session.json") as f:
+with open(".refrakt/suno_session.json") as f:
     session = json.load(f)
 
 r = requests.post(
@@ -251,8 +251,8 @@ The generate endpoint requires a valid hCaptcha `token` field. Without it → 42
 - **Direct API calls from Python:** No browser = no hCaptcha widget = no token at all → 422.
 
 **Current working approach:**
-1. Open `playwright-cli --headed --persistent --profile=.playwright-profile` to `suno.com/create`
-2. Inject session cookies from `.suno_session.json`
+1. Open `playwright-cli --headed --persistent --profile=.refrakt/playwright-profile` to `suno.com/create`
+2. Inject session cookies from `.refrakt/suno_session.json`
 3. Switch to Custom mode, fill style tags + title, click Create
 4. The invisible hCaptcha auto-generates the token — no user interaction needed
 5. Poll and download via `suno.py download`
@@ -264,7 +264,7 @@ The generate endpoint requires a valid hCaptcha `token` field. Without it → 42
 | 1 | Playwright `--headed` | In-memory | Visual grid challenge | Had to solve manually |
 | 2 | Playwright `--headed --persistent` | Persistent | No challenge (invisible auto-pass) | 2 songs submitted, 0 captchas |
 
-**Persistent profile location:** `.playwright-profile/` (project-relative, gitignored)
+**Persistent profile location:** `.refrakt/playwright-profile/` (project-relative, gitignored)
 
 ### Polling
 
@@ -316,9 +316,13 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
 - CLI entry points: `bin/` — executable scripts (no `.py` extension), add to `$PATH`
 - Library modules: `lib/` (`suno.py`, `generate_prompts.py`, etc.) — importable, paths resolve via `__file__`
 - Output data: `playlist_data.json` (gitignored)
-- Genre cache: `.lastfm_cache.json` (gitignored, auto-created by `enrich_genres.py`)
-- Research cache: `.prompt_research_cache.json` (gitignored, auto-created by `generate_prompts.py`)
-- Playlist cache: `.playlist_cache.json` (gitignored, 24-hour TTL, avoids Spotify rate limits)
+- Working data: `.refrakt/` (gitignored) — caches, session, browser profile
+  - `.refrakt/caches/lastfm.json` — Last.fm genre cache (auto-created by `enrich_genres.py`)
+  - `.refrakt/caches/prompt_research.json` — Perplexity research cache (auto-created by `generate_prompts.py`)
+  - `.refrakt/caches/playlist.json` — Spotify playlist cache (24-hour TTL, avoids rate limits)
+  - `.refrakt/suno_session.json` — Suno auth session
+  - `.refrakt/playwright-profile/` — persistent browser profile (captcha-free Suno submission)
+  - `.refrakt/playwright-cli/` — Playwright traces and downloads
 - Temp audio (candidates): `SUNO_TEMP_DIR` (from `.env`, default `~/Google Drive/My Drive/SunoTemp/`)
   - Structure: `SUNO_TEMP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
   - All 6 candidates (3 prompt variations × 2 clips) go here
@@ -327,7 +331,6 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
   - **All temp/working files go here** — never leave `_`-prefixed files in project root
 - Final audio: `output/YYYY-MM-DD/{Title}.m4a` — clean filename, no timestamp prefix, no clip ID
   - For albums: `output/{Album Name}/##_{Title}.m4a`
-- Suno session: `.suno_session.json` (gitignored)
 - Generated track tracking: `generated_tracks.json` (tracks which source tracks have been submitted)
 - Documentation: `docs/` with screenshots in `docs/images/`
 - Skills: `.claude/skills/{name}/SKILL.md` — reusable pipeline actions with YAML frontmatter
@@ -380,5 +383,5 @@ This project uses `playwright-cli` (with `--headed` flag) for interactive browse
 
 - React checkboxes often need JS eval: `playwright-cli run-code "async page => page.evaluate(() => document.getElementById('accepted').click())"`
 - Use `playwright-cli network` to capture API calls while interacting with the UI
-- Captured traces go to `.playwright-cli/traces/`
+- Captured traces go to `.refrakt/playwright-cli/traces/`
 - The `resources/` subdirectory of a trace contains API response JSON files

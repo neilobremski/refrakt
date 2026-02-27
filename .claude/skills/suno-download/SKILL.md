@@ -30,5 +30,5 @@ Files are saved as: `YYYYMMDDhhmmss_{title}__{clip_id}.m4a`
 
 ## Prerequisites
 
-- `.suno_session.json` must exist with valid session
+- `.refrakt/suno_session.json` must exist with valid session
 - Clip IDs must be valid UUIDs from Suno generations

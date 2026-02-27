@@ -17,15 +17,18 @@ Run `lib/audio_analysis.py` on each track for quantitative measurements:
 .venv/bin/python -c "
 import sys; sys.path.insert(0, 'lib')
 from audio_analysis import full_critique
-result = full_critique('PATH_TO_M4A', tags='THE TAGS', is_instrumental=True/False)
+result = full_critique('PATH_TO_M4A', tags='THE TAGS', is_instrumental=True/False, expected_duration=180)
 import json; print(json.dumps(result, indent=2))
 "
 ```
 
 This gives you:
+- **Duration check** — too short (under 2:00 for standard, 1:30 for intros) OR too long (truncated at 8-min limit)
 - **Truncation detection** — was the track cut off by Suno's 8-min limit?
 - **Timbral variety** — is it one synth loop for 3 minutes or does it have sections?
 - **Dynamic range** — is it over-compressed monotone or does it breathe?
+
+The `expected_duration` parameter (seconds) sets a specific target. If omitted, defaults to 120s for standard tracks, 90s for intros/outros. Tracks under 60% of expected duration are flagged SHORT.
 - **Structural analysis** — are there actual distinct sections or just a loop?
 - **Onset density** — enough musical events happening?
 
