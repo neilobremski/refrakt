@@ -512,6 +512,119 @@ def cmd_submit(args):
 
 
 # ---------------------------------------------------------------------------
+# Pick winner
+# ---------------------------------------------------------------------------
+
+FINAL_DIR = os.path.expanduser(os.getenv("OUT_DIR", "~/Downloads"))
+
+
+def cmd_pick(args):
+    """Pick the best clip for a prompt entry: copy to OUT_DIR, update tracking."""
+    index = args.index
+    clip_id_prefix = args.clip_id  # optional: force a specific clip
+
+    # Load prompt entry
+    with open(PROMPTS_FILE) as f:
+        prompts = json.load(f)
+    if index < 0 or index >= len(prompts):
+        print(f"ERROR: index {index} out of range", file=sys.stderr)
+        sys.exit(1)
+
+    entry = prompts[index]
+    title = entry.get("invented_title", "untitled")
+    safe_title = sanitize_filename(title)
+    source_id = entry.get("source_track_id", "")
+
+    # Find WIP candidates
+    import glob as _glob
+    wip_pattern = os.path.join(OUTPUT_DIR, "**", f"*{safe_title}__*.m4a")
+    candidates = sorted(_glob.glob(wip_pattern, recursive=True))
+    if not candidates:
+        print(f"ERROR: no WIP candidates found for '{title}'", file=sys.stderr)
+        sys.exit(1)
+
+    if clip_id_prefix:
+        # User specified a clip
+        matches = [c for c in candidates if clip_id_prefix in c]
+        if not matches:
+            print(f"ERROR: no candidate matching '{clip_id_prefix}'", file=sys.stderr)
+            sys.exit(1)
+        winner_m4a = matches[0]
+    else:
+        # Auto-pick via Gemini eval
+        try:
+            from gemini_audio import evaluate_track
+        except ImportError:
+            sys.path.insert(0, str(_BASE_DIR / "lib"))
+            from gemini_audio import evaluate_track
+
+        tags = entry.get("tags", "")
+        is_inst = entry.get("make_instrumental", False)
+
+        print(f"Evaluating {len(candidates)} candidates for '{title}'...")
+        best_score = -1
+        best_art = -1
+        winner_m4a = None
+
+        for path in candidates:
+            cid = os.path.basename(path).split("__")[1].replace(".m4a", "")
+            try:
+                result = evaluate_track(
+                    path, tags=tags, mood=tags.split(",")[-2].strip() if "," in tags else "",
+                    title=title, is_instrumental=is_inst,
+                )
+                score = result.get("overall_score", 0)
+                art = result.get("artistic_interest", 0)
+                verdict = result.get("verdict", "?")
+                print(f"  {cid}: {score}/5 ({verdict})")
+                if score > best_score or (score == best_score and art > best_art):
+                    best_score = score
+                    best_art = art
+                    winner_m4a = path
+            except Exception as e:
+                print(f"  {cid}: ERROR ({e})")
+
+        if not winner_m4a:
+            print("ERROR: no clips could be evaluated", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"\nWinner: {os.path.basename(winner_m4a)} ({best_score}/5)")
+
+    # Copy to OUT_DIR
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    final_dir = os.path.join(FINAL_DIR, date_str)
+    os.makedirs(final_dir, exist_ok=True)
+
+    dest_m4a = os.path.join(final_dir, f"{title}.m4a")
+    shutil.copy2(winner_m4a, dest_m4a)
+    print(f"  Copied: {dest_m4a}")
+
+    # Also copy MP3 if it exists
+    winner_mp3 = winner_m4a.replace(".m4a", ".mp3")
+    if os.path.exists(winner_mp3):
+        dest_mp3 = os.path.join(final_dir, f"{title}.mp3")
+        shutil.copy2(winner_mp3, dest_mp3)
+        print(f"  Copied: {dest_mp3}")
+
+    # Update generated_tracks.json
+    if source_id:
+        tracking_file = str(_BASE_DIR / "generated_tracks.json")
+        try:
+            with open(tracking_file) as f:
+                tracking = json.load(f)
+            ids = set(tracking.get("track_ids", []))
+        except (FileNotFoundError, json.JSONDecodeError):
+            ids = set()
+        ids.add(source_id)
+        with open(tracking_file, "w") as f:
+            json.dump({"track_ids": sorted(ids)}, f, indent=2)
+            f.write("\n")
+        print(f"  Tracking updated: {source_id}")
+
+    print(f"\nDone. Output: {final_dir}/{title}.*")
+
+
+# ---------------------------------------------------------------------------
 # Main / argparse
 # ---------------------------------------------------------------------------
 
@@ -556,6 +669,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_sub.add_argument("--no-download", action="store_true",
                         help="Skip polling and downloading after submission")
     p_sub.set_defaults(func=cmd_submit)
+
+    # pick
+    p_pick = sub.add_parser("pick", help="Pick best clip, copy to OUT_DIR, update tracking")
+    p_pick.add_argument("--index", type=int, default=0,
+                         help="Prompt index in prompts_data.json (default: 0)")
+    p_pick.add_argument("--clip-id", type=str, default=None,
+                         help="Force a specific clip ID prefix (skip eval)")
+    p_pick.set_defaults(func=cmd_pick)
 
     return parser
 

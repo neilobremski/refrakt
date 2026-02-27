@@ -57,6 +57,10 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - `lib/refrakt.py` + `bin/refrakt` — pick a track from any playlist, fetch original lyrics from Genius, research via Perplexity, synthesize tags
   - `lib/genius.py` — fetches original lyrics from Genius (free API, token in `.env` as `GENIUS_ACCESS_TOKEN`)
   - `.claude/agents/lyricist.md` — Haiku-powered agent that writes refracted lyrics (same spirit, completely new words)
+  - `.claude/agents/lyrics-critic.md` — Haiku agent for adversarial lyrics evaluation
+    - Evaluates: singability, imagery vividness, emotional arc, originality, structural density
+    - Approves or rejects with specific revision notes; max 2 rejection rounds
+    - Pipeline: lyricist agent → lyrics-critic agent → (repeat if rejected) → producer agent
   - All creative agents use `bin/prompts` CLI for safe JSON manipulation (not direct file Edit/Write)
   - Pipeline: `bin/refrakt` → spawn lyricist agent → `/suno-generate`
   - Artist name: read from `ARTIST_NAME` in `.env` (default: "Refrakt" if not set). Neil's is "Denumerator".
@@ -103,7 +107,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Opens browser, injects cookies, creates 3 tag variations, fills/submits each, closes browser
   - Auto-discovers new clip IDs via feed diffing; optional `--no-download` flag
   - Replaces manual playwright-cli orchestration with a single pre-approvable command
-- `bin/refrakt-check` — post-pipeline completion validator
+- `bin/refrakt check` — post-pipeline completion validator (also available as `bin/refrakt-check`)
   - Checks 8 steps: tags, lyrics, title, WIP candidates (6), output, cover art, album art, tracking
   - Any missing step → exit 1; ALL CLEAR → exit 0. Run as final phase of every pipeline.
 - `lib/gemini_image.py` — Gemini API album art generation (square + widescreen)
@@ -296,8 +300,12 @@ bin/suno-tag <clip_id> ...               # tag specific clips by ID prefix
 bin/download-tracks <clip_id> ...        # download clips (standalone utility)
 
 # Pipeline validation
-bin/refrakt-check                        # check all entries for completeness
-bin/refrakt-check --index 0              # check specific entry
+bin/refrakt check                        # check all entries for completeness
+bin/refrakt check --index 0              # check specific entry
+
+# Pick winner and finalize
+bin/suno pick --index 0                  # auto-eval all candidates, copy best to OUT_DIR
+bin/suno pick --index 0 --clip-id abc123 # force a specific clip (skip eval)
 ```
 
 ---

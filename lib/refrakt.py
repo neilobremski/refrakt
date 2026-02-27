@@ -267,7 +267,20 @@ def research_track(track_name, artists, cache):
 # Main
 # ---------------------------------------------------------------------------
 
+def _run_check(argv):
+    """Run pipeline completion checks (delegates to bin/refrakt-check logic)."""
+    import subprocess
+    check_script = str(BASE_DIR / "bin" / "refrakt-check")
+    result = subprocess.run([sys.executable, check_script] + argv)
+    sys.exit(result.returncode)
+
+
 def main():
+    # Dispatch subcommands: "bin/refrakt check [--index N]"
+    if len(sys.argv) > 1 and sys.argv[1] == "check":
+        _run_check(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(
         description="Refrakt — create an original song refracted from a playlist track."
     )

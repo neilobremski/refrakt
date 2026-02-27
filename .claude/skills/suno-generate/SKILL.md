@@ -47,7 +47,16 @@ Task tool: subagent_type="general-purpose", model="haiku"
 Prompt: "Read .claude/agents/lyricist.md for instructions, then process prompts_data.json"
 ```
 
-After the lyricist agent writes refracted lyrics, spawn the producer agent to optimize tags with vocal descriptors:
+After the lyricist writes lyrics, spawn the lyrics-critic to evaluate quality:
+
+```
+Task tool: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/lyrics-critic.md for instructions, then process prompts_data.json"
+```
+
+If the critic rejects, run the lyricist again with the feedback, then re-evaluate. Max 2 rejection rounds.
+
+After lyrics are approved, spawn the producer agent to optimize tags with vocal descriptors:
 
 ```
 Task tool: subagent_type="general-purpose", model="haiku"
