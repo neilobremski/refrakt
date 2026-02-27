@@ -200,7 +200,7 @@ Use Playwright to interact with Gemini's image generation:
 3. **Prefix ALL image prompts with "Generate an image:"** — without this prefix, the Thinking model analyzes/discusses rather than generating
 4. Request **square 1:1** with title text included in the prompt
 5. Wait ~60s for generation, download via "Download full size image" button
-6. **Immediately move** downloaded file from `.refrakt/playwright-cli/` to SunoTemp with meaningful name — Playwright reuses filenames and will silently overwrite/cache
+6. **Immediately move** downloaded file from `.refrakt/playwright-cli/` to WIP_DIR with meaningful name — Playwright reuses filenames and will silently overwrite/cache
 7. Ask Gemini to regenerate in **widescreen 16:9** aspect ratio with same composition
 8. Download and move the widescreen version
 
@@ -218,7 +218,7 @@ Ask Gemini to add album title + artist name to both images:
 
 ### Step 4.4: Save to Album Folder
 
-Copy images from `.refrakt/playwright-cli/` to `output/ALBUM_NAME/`:
+Copy images from `.refrakt/playwright-cli/` to `OUT_DIR/ALBUM_NAME/`:
 - `cover.png` — square with title (for MP3 metadata)
 - `cover-wide.png` — widescreen with title (for YouTube video)
 
@@ -432,15 +432,15 @@ Print a summary to the user:
   Runtime:  [MM:SS]
 
   Files:
-    output/[album]/##. Track Name.mp3  (individual tracks)
-    output/[album]/[album] (Full Album).mp3
-    output/[album]/[album] (Full Album).mp4
-    output/[album]/album-cover.png (square)
-    output/[album]/album-cover-wide.png (widescreen)
-    output/[album]/_tracklist.json
-    output/[album]/_album_report.md
-    output/[album]/_youtube_description.txt
-    output/[album]/_timings.json
+    OUT_DIR/[album]/##. Track Name.mp3  (individual tracks)
+    OUT_DIR/[album]/[album] (Full Album).mp3
+    OUT_DIR/[album]/[album] (Full Album).mp4
+    OUT_DIR/[album]/album-cover.png (square)
+    OUT_DIR/[album]/album-cover-wide.png (widescreen)
+    OUT_DIR/[album]/_tracklist.json
+    OUT_DIR/[album]/_album_report.md
+    OUT_DIR/[album]/_youtube_description.txt
+    OUT_DIR/[album]/_timings.json
 
   YouTube:  [URL]
 

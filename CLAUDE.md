@@ -8,7 +8,7 @@ Build an end-to-end pipeline:
 2. Analyze each track's audio features, genres, and overall vibe
 3. Generate a Suno AI style prompt per track — with an **invented title** (not derived from the original track name, to avoid guard rails)
 4. Submit each prompt to Suno AI, wait for generation to complete
-5. Download the resulting MP3s to `output/`
+5. Download the resulting MP3s to `OUT_DIR` (`~/Downloads/` by default)
 6. (Later) Tag the MP3s with ID3 metadata (title, album art, etc.)
 
 The playlist is instrumental/ambient. The aim is to create original Suno-generated instrumentals that capture a similar mood and musical character to the source tracks.
@@ -29,7 +29,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 - Suno session authentication confirmed working
   - Session stored in `.refrakt/suno_session.json` (gitignored)
   - JWT refresh via Clerk confirmed working
-- First test generation completed: 2 clips generated, downloaded to `output/`
+- First test generation completed: 2 clips generated, downloaded to `OUT_DIR`
   - Note: test clips used the original track name ("Semi Detached") — future generations must use invented titles per the title convention below
 - `suno.py` — CLI for auth verification, credit check, feed listing, polling, and downloading
 - `download_tracks.py` working (standalone download utility)
@@ -57,6 +57,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - `lib/refrakt.py` + `bin/refrakt` — pick a track from any playlist, fetch original lyrics from Genius, research via Perplexity, synthesize tags
   - `lib/genius.py` — fetches original lyrics from Genius (free API, token in `.env` as `GENIUS_ACCESS_TOKEN`)
   - `.claude/agents/lyricist.md` — Haiku-powered agent that writes refracted lyrics (same spirit, completely new words)
+  - All creative agents use `bin/prompts` CLI for safe JSON manipulation (not direct file Edit/Write)
   - Pipeline: `bin/refrakt` → spawn lyricist agent → `/suno-generate`
   - Artist name: read from `ARTIST_NAME` in `.env` (default: "Refrakt" if not set). Neil's is "Denumerator".
   - First refraction: "Glass Cradle" (refracted from "Retrovertigo" by Mr. Bungle, Rocket playlist)
@@ -89,6 +90,19 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Uses WebSearch for uniqueness checks (is this already a famous song?)
   - Approves or rejects with specific feedback; max 2 rejection rounds
   - Sequential pattern: title-designer agent → title-critic agent → (repeat if rejected)
+- `bin/prompts` — safe CLI for `prompts_data.json` manipulation (used by all creative agents)
+  - Subcommands: `list`, `count`, `get`, `set`, `delete`
+  - Atomic writes (temp file + rename) prevent JSON corruption
+  - `--stdin` flag for multi-line lyrics, `--json` flag for structured values (lists, objects)
+  - All creative agents (lyricist, producer, title-designer, title-critic) use `Bash(bin/prompts *)` instead of direct `Read`/`Edit`/`Write` on JSON files
+- `.claude/agents/suno.md` — Haiku agent for Suno browser automation and submission
+  - Consolidates all Suno knowledge: auth, hCaptcha, React form quirks, prompt variation strategy
+  - Handles: open browser → inject cookies → create 3 prompt variations → fill/submit → poll → download
+  - Knows about Advanced Options (male/female selector, exclude styles)
+- `.claude/agents/artist.md` — Haiku agent for album/track artwork via Gemini (Nano Banana)
+  - Generates square (1:1, ~2048px) for metadata and widescreen (16:9, ~2752px) for YouTube
+  - Browser automation at gemini.google.com with persistent Playwright profile
+  - Spawnable in background while other post-eval work proceeds
 - `.claude/agents/audio-critic.md` — Haiku agent for ruthless audio quality evaluation
   - Combines Gemini 2.5 Flash listening with librosa signal analysis
   - Detects: truncation, generic loops, batch similarity, low variety, vocal mismatch
@@ -137,7 +151,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 ### Generation Strategy
 - **3 prompt variations per song** — vary the first tag (position 1 carries ~50% weight), BPM, and structural metatags to force sonic diversity
 - Each variation generates 2 clips → **6 candidates total per song**
-- Audio-critic evaluates all 6 → auto-picks the best → copies to `output/YYYY-MM-DD/`
+- Audio-critic evaluates all 6 → auto-picks the best → copies to `OUT_DIR/YYYY-MM-DD/`
 - Cost: 30 credits per song (3 generations × 10 credits). Quality over quantity.
 - If all 6 candidates REJECT, auto-regen with adjusted tags (max 2 regen rounds)
 
@@ -177,129 +191,15 @@ Stored in `.env` (gitignored). Do not commit. Do not print or log.
 
 ## Suno Integration
 
-### Authentication (Confirmed Working)
+Full Suno knowledge (auth, API, hCaptcha, browser automation, React form quirks, prompt variation strategy) is in `.claude/agents/suno.md`. Key quick-reference:
 
-Suno uses Clerk for auth. Two token layers:
-1. `__client` — long-lived JWT in `.refrakt/suno_session.json` (expires ~2027)
-2. Short-lived JWT — refreshed per-request via Clerk
-
-**JWT Refresh (confirmed pattern):**
-```python
-import requests, json
-
-with open(".refrakt/suno_session.json") as f:
-    session = json.load(f)
-
-r = requests.post(
-    f"https://auth.suno.com/v1/client/sessions/{session['session_id']}/tokens",
-    headers={
-        "Cookie": f"__client={session['client_token']}",
-        "Origin": "https://suno.com",
-    },
-    params={"_clerk_js_version": "5.36.2"},
-)
-jwt = r.json()["jwt"]
-```
-
-**Auth domain:** `auth.suno.com` (NOT `clerk.suno.com` — doc was wrong)
-**API base:** `https://studio-api.prod.suno.com` (NOT `studio-api.suno.ai` — doc was wrong)
-
-### Generate Endpoint
-
-```
-POST https://studio-api.prod.suno.com/api/generate/v2-web/
-Authorization: Bearer {jwt}
-Cookie: sessionid={django_session_id}
-Content-Type: application/json
-```
-
-**Request body (confirmed format):**
-```json
-{
-  "token": "P1_...",
-  "generation_type": "TEXT",
-  "title": "Your Invented Title",
-  "tags": "ambient electronic, IDM, instrumental, atmospheric, synthesizer, 120bpm",
-  "negative_tags": "",
-  "mv": "chirp-crow",
-  "prompt": "",
-  "make_instrumental": true,
-  "user_uploaded_images_b64": null,
-  "metadata": {
-    "web_client_pathname": "/create",
-    "is_max_mode": false,
-    "is_mumble": false,
-    "create_mode": "custom",
-    "user_tier": "3eaebef3-ef46-446a-931c-3d50cd1514f1",
-    "create_session_token": "ec0dfbcd-5b3d-47d7-abc2-09cb1f9a6770",
-    "disable_volume_normalization": false,
-    "can_control_sliders": ["weirdness_constraint", "style_weight"]
-  },
-  "override_fields": [],
-  "transaction_uuid": "d102192f-7638-40a0-9a92-ad81384b15ec"
-}
-```
-
-### hCaptcha Behavior (Updated Feb 24 2026)
-
-The generate endpoint requires a valid hCaptcha `token` field. Without it → 422 "Token validation failed". However, the hCaptcha is configured as an **invisible widget** with a **heartbeat action** — it runs silently in the browser and auto-generates tokens without user interaction when the risk score is low.
-
-**When does the visual challenge appear?**
-- The invisible captcha evaluates browser fingerprint, automation flags, and session history
-- **Playwright `--headed` with in-memory profile:** Visual challenge appears (image grid). hCaptcha detects `navigator.webdriver=true` and the fresh profile.
-- **Playwright `--headed --persistent` with persistent profile:** No visual challenge. The invisible widget auto-passes and tokens are generated silently. Both songs in a 2-song batch submitted without any captcha.
-- **Direct API calls from Python:** No browser = no hCaptcha widget = no token at all → 422.
-
-**Current working approach:**
-1. Open `playwright-cli --headed --persistent --profile=.refrakt/playwright-profile` to `suno.com/create`
-2. Inject session cookies from `.refrakt/suno_session.json`
-3. Switch to Custom mode, fill style tags + title, click Create
-4. The invisible hCaptcha auto-generates the token — no user interaction needed
-5. Poll and download via `suno.py download`
-
-**Browser automation attempt history:**
-
-| Attempt | Browser | Profile | Captcha? | Result |
-|---------|---------|---------|----------|--------|
-| 1 | Playwright `--headed` | In-memory | Visual grid challenge | Had to solve manually |
-| 2 | Playwright `--headed --persistent` | Persistent | No challenge (invisible auto-pass) | 2 songs submitted, 0 captchas |
-
-**Persistent profile location:** `.refrakt/playwright-profile/` (project-relative, gitignored)
-
-### Polling
-
-```python
-r = requests.get(
-    f"https://studio-api.prod.suno.com/api/feed/?ids={ids_param}",
-    headers={
-        "Authorization": f"Bearer {jwt}",
-        "Cookie": f"sessionid={django_session}",
-    },
-)
-```
-
-Poll every 5s. Status goes: `submitted` → `running` → `complete`.
-
-### Audio Download
-
-Two formats available per clip on the CDN (both public, no auth needed, permanent URLs):
-
-| Format | URL pattern | Quality | Used by |
-|--------|-------------|---------|---------|
-| MP3 | `https://cdn1.suno.ai/{clip_id}.mp3` | 64 kbps, 48 kHz stereo | API `audio_url` field |
-| M4A (Opus) | `https://cdn1.suno.ai/{clip_id}.m4a` | ~143 kbps, 48 kHz stereo | Web player; **preferred** |
-
-All download scripts in this project use `.m4a` by default for higher quality.
-
-### Current Model
-
-`chirp-crow` = v5 (the latest as of Feb 2026). Session refers to it as "v4.5" in some fields, but `mv` field is `chirp-crow`.
-
-### Credits
-
-- 10 credits per generation (= 2 clips)
-- Pro tier: 2500 credits/month
-- Balance: 2460 credits remaining (used 40 total: 4 generations × 10 credits)
+- **Auth:** Clerk-based. Session in `.refrakt/suno_session.json`. JWT refresh via `auth.suno.com`.
+- **API base:** `https://studio-api.prod.suno.com`
+- **CDN:** `https://cdn1.suno.ai/{clip_id}.m4a` (public, no auth, Opus ~143kbps preferred)
+- **Browser:** Always use `playwright-cli --headed --persistent --profile=.refrakt/playwright-profile` (captcha-free)
+- **Model:** `chirp-crow` = v5 (latest as of Feb 2026)
+- **Credits:** 10 per generation (= 2 clips). Pro tier: 2500/month.
+- **CLI:** `bin/suno auth|credits|feed|poll|download`, `bin/suno-fill-form`, `bin/prompts`
 
 ---
 
@@ -323,14 +223,14 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
   - `.refrakt/suno_session.json` — Suno auth session
   - `.refrakt/playwright-profile/` — persistent browser profile (captcha-free Suno submission)
   - `.refrakt/playwright-cli/` — Playwright traces and downloads
-- Temp audio (candidates): `SUNO_TEMP_DIR` (from `.env`, default `~/Google Drive/My Drive/SunoTemp/`)
-  - Structure: `SUNO_TEMP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
+- WIP audio (candidates): `WIP_DIR` (from `.env`, default `~/Google Drive/My Drive/SunoTemp/`)
+  - Structure: `WIP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
   - All 6 candidates (3 prompt variations × 2 clips) go here
-  - Audio-critic evaluates, picks best, copies winner to `output/`
+  - Audio-critic evaluates, picks best, copies winner to `OUT_DIR`
   - Also stores: research files, batch prompts, eval results, album art, track journals
   - **All temp/working files go here** — never leave `_`-prefixed files in project root
-- Final audio: `output/YYYY-MM-DD/{Title}.m4a` — clean filename, no timestamp prefix, no clip ID
-  - For albums: `output/{Album Name}/##_{Title}.m4a`
+- Final audio: `OUT_DIR/YYYY-MM-DD/{Title}.m4a` (from `.env`, default `~/Downloads/`) — clean filename, no timestamp prefix, no clip ID
+  - For albums: `OUT_DIR/{Album Name}/##_{Title}.m4a`
 - Generated track tracking: `generated_tracks.json` (tracks which source tracks have been submitted)
 - Documentation: `docs/` with screenshots in `docs/images/`
 - Skills: `.claude/skills/{name}/SKILL.md` — reusable pipeline actions with YAML frontmatter
@@ -353,6 +253,16 @@ bin/fetch-playlist                       # Step 1a: fetch Spotify playlist data
 bin/enrich-genres                        # Step 1b: enrich with Last.fm genre tags
 bin/generate-prompts --count 10          # Step 2a: research tracks + generate rich prompts (instrumental)
 bin/refrakt --playlist "Rocket" --track "Name"  # Step 2b: Refrakt — vocal refraction from any playlist
+
+# Prompt data manipulation (used by creative agents)
+bin/prompts list                         # summary table of all entries
+bin/prompts count                        # number of entries
+bin/prompts get 0                        # full entry as pretty JSON
+bin/prompts get 0 tags                   # single field value (raw text)
+bin/prompts set 0 tags "new tags"        # set a scalar field
+echo "lyrics" | bin/prompts set 0 prompt --stdin  # set from stdin (multi-line)
+bin/prompts set 0 _title_candidates --json '[...]' # set structured value
+bin/prompts delete 0 _title_rejected     # remove a field
 
 # Browser form fill (used during /suno-generate Phase 3)
 bin/suno-fill-form                       # fill form from prompts_data.json (index 0)
@@ -379,7 +289,7 @@ bin/download-tracks <clip_id> ...        # download clips (standalone utility)
 
 ## Browser Automation Notes
 
-This project uses `playwright-cli` (with `--headed` flag) for interactive browser tasks.
+This project uses `playwright-cli` (with `--headed` flag) for interactive browser tasks. Suno-specific browser knowledge is in `.claude/agents/suno.md`.
 
 - React checkboxes often need JS eval: `playwright-cli run-code "async page => page.evaluate(() => document.getElementById('accepted').click())"`
 - Use `playwright-cli network` to capture API calls while interacting with the UI

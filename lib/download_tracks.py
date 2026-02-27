@@ -24,10 +24,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 import requests
+from dotenv import load_dotenv
 
 _BASE_DIR = Path(__file__).parent.parent
+load_dotenv(_BASE_DIR / ".env")
+
 SESSION_FILE = str(_BASE_DIR / ".refrakt" / "suno_session.json")
-OUTPUT_DIR = str(_BASE_DIR / "output")
+OUTPUT_DIR = os.path.expanduser(os.getenv("WIP_DIR", "~/Google Drive/My Drive/SunoTemp/"))
 
 # Hardcoded clip IDs from the initial test generation (2026-02-24).
 # Pass IDs on the command line to override.
@@ -118,7 +121,8 @@ def main():
     print(f"Polling {len(clip_ids)} clip(s)...")
     clips = wait_for_completion(clip_ids, jwt, django_session)
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    date_dir = os.path.join(OUTPUT_DIR, datetime.now().strftime("%Y-%m-%d"))
+    os.makedirs(date_dir, exist_ok=True)
 
     for i, clip in enumerate(clips, start=1):
         clip_id = clip["id"]
@@ -141,7 +145,7 @@ def main():
         safe_title = sanitize_filename(title)
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         filename = f"{timestamp}_{safe_title}__{clip_id[:8]}.m4a"
-        dest = os.path.join(OUTPUT_DIR, filename)
+        dest = os.path.join(date_dir, filename)
 
         print(f"  [{i}] Downloading: {title}")
         print(f"       {m4a_url}")

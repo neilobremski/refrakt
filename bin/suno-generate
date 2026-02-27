@@ -34,6 +34,9 @@ if _sp:
     site.addsitedir(_sp[0])
 sys.path.insert(0, str(PROJECT_ROOT / "lib"))
 
+from dotenv import load_dotenv
+load_dotenv(PROJECT_ROOT / ".env")
+
 from generate_prompts import (
     PLAYLIST_FILE,
     GENERATED_FILE,
@@ -408,13 +411,14 @@ def download_clip(clip: dict):
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     safe_title = sanitize_filename(title)
     filename = f"{timestamp}_{safe_title}__{clip_id[:8]}.m4a"
-    dest = os.path.join(OUTPUT_DIR, filename)
+    date_dir = os.path.join(OUTPUT_DIR, datetime.now().strftime("%Y-%m-%d"))
+    dest = os.path.join(date_dir, filename)
     m4a_url = f"{CDN_BASE}/{clip_id}.m4a"
 
     print(f"  Downloading: {title}")
     print(f"    {m4a_url}")
     print(f"    -> {dest}")
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(date_dir, exist_ok=True)
     size = download_file(m4a_url, dest)
     print(f"    Done ({size // 1024} KB)")
 

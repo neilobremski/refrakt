@@ -166,7 +166,7 @@ Granular Recursion (A)         PASS    Keep    -          PASS
 ## Important
 
 - Use `.venv/bin/python` for all Python execution
-- M4A files are in `output/` directory
+- M4A files are in `OUT_DIR` directory (`~/Downloads/` by default, configurable via `.env`)
 - Read `prompts_data.json` or the batch JSON files for tags and mood info
 - You are NOT evaluating A vs B picks — you are evaluating absolute quality
 - Both A and B clips of a track can pass, or both can fail

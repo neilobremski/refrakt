@@ -261,7 +261,7 @@ Or use the standalone downloader:
 bin/download-tracks <clip_id_1> <clip_id_2> ...
 ```
 
-Files are saved to `output/` as `YYYYMMDDhhmmss_{title}__{clip_id}.m4a` (Opus ~143kbps).
+Files are saved to `WIP_DIR/YYYY-MM-DD/` as `{Title}__{clip_id}.m4a` (Opus ~143kbps). After evaluation, the winner is promoted to `OUT_DIR`.
 
 ---
 

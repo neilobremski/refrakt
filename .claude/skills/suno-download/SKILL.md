@@ -8,7 +8,7 @@ argument-hint: "<clip_id> [<clip_id> ...]"
 
 # /suno-download — Download Completed Suno Clips
 
-Downloads completed Suno clips to the `output/` directory as `.m4a` (Opus ~143kbps).
+Downloads completed Suno clips to `WIP_DIR` (candidates for evaluation) as `.m4a` (Opus ~143kbps).
 
 ## Commands
 

@@ -22,17 +22,22 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-# Add lib/ to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+# Add lib/ and venv site-packages to path
+import site
+import glob as _glob
+_root = Path(__file__).resolve().parent.parent
+_sp = _glob.glob(str(_root / ".venv/lib/python*/site-packages"))
+if _sp: site.addsitedir(_sp[0])
+sys.path.insert(0, str(_root / "lib"))
 
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=str(Path(__file__).resolve().parent.parent / ".env"))
+load_dotenv(dotenv_path=str(_root / ".env"))
 
 from audio_analysis import full_critique, batch_similarity
 
 
 def get_temp_dir(date_str=None):
-    base = os.path.expanduser(os.getenv("SUNO_TEMP_DIR", "~/Google Drive/My Drive/SunoTemp/"))
+    base = os.path.expanduser(os.getenv("WIP_DIR", "~/Google Drive/My Drive/SunoTemp/"))
     if date_str is None:
         date_str = date.today().isoformat()
     return os.path.join(base, date_str)

@@ -8,12 +8,12 @@ argument-hint: "[--all] [--dry-run] [clip_id ...]"
 
 # /suno-tag — Tag M4A Files with Metadata
 
-Tags downloaded M4A files in `output/` with metadata from the Suno feed API: title, artist, album, genre (style tags), year, comment (clip ID + model), description (source track), and cover art (JPEG).
+Tags downloaded M4A files in `OUT_DIR` with metadata from the Suno feed API: title, artist, album, genre (style tags), year, comment (clip ID + model), description (source track), and cover art (JPEG).
 
 ## Usage
 
 ```bash
-# Tag all files in output/
+# Tag all files in OUT_DIR
 bin/suno-tag --all
 
 # Preview what would be tagged
@@ -38,7 +38,7 @@ bin/suno-tag 0492fab7 46ba57f9
 
 ## How It Works
 
-1. Scans `output/` for `.m4a` files
+1. Scans `OUT_DIR` for `.m4a` files
 2. Extracts 8-char clip ID prefix from each filename (`__{prefix}.m4a`)
 3. Fetches Suno feed (up to 10 pages) to resolve full clip metadata
 4. Matches clips to prompts_data.json entries by title (for source track info)

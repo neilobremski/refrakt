@@ -34,14 +34,17 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
 _BASE_DIR = Path(__file__).parent.parent
+load_dotenv(_BASE_DIR / ".env")
+
 SESSION_FILE = str(_BASE_DIR / ".refrakt" / "suno_session.json")
-OUTPUT_DIR = str(_BASE_DIR / "output")
+OUTPUT_DIR = os.path.expanduser(os.getenv("WIP_DIR", "~/Google Drive/My Drive/SunoTemp/"))
 AUTH_BASE = "https://auth.suno.com"
 API_BASE = "https://studio-api.prod.suno.com"
 CDN_BASE = "https://cdn1.suno.ai"
@@ -275,7 +278,8 @@ def cmd_download(args):
     print(f"Polling {len(clip_ids)} clip(s)...")
     clips = wait_for_completion(session, jwt, clip_ids)
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    date_dir = os.path.join(OUTPUT_DIR, datetime.now().strftime("%Y-%m-%d"))
+    os.makedirs(date_dir, exist_ok=True)
 
     # Load prompts for album name metadata (matched per-clip by title)
     prompts = []
@@ -305,7 +309,7 @@ def cmd_download(args):
         safe_title = sanitize_filename(title)
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         filename = f"{timestamp}_{safe_title}__{clip_id[:8]}.m4a"
-        dest = os.path.join(OUTPUT_DIR, filename)
+        dest = os.path.join(date_dir, filename)
 
         print(f"  [{i}] {title}")
         print(f"       {m4a_url}")

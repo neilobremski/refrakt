@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 from mutagen.mp4 import MP4, MP4Cover
 
 # ---------------------------------------------------------------------------
@@ -26,11 +27,13 @@ from mutagen.mp4 import MP4, MP4Cover
 # ---------------------------------------------------------------------------
 
 _BASE_DIR = Path(__file__).parent.parent
-OUTPUT_DIR = _BASE_DIR / "output"
+load_dotenv(_BASE_DIR / ".env")
+
+OUTPUT_DIR = Path(os.path.expanduser(os.getenv("OUT_DIR", "~/Downloads")))
 PROMPTS_FILE = _BASE_DIR / "prompts_data.json"
 CDN_BASE = "https://cdn1.suno.ai"
 DEFAULT_ALBUM_NAME = "Refrakt"
-ARTIST_NAME = "Refrakt"
+ARTIST_NAME = os.getenv("ARTIST_NAME", "Refrakt")
 
 
 # ---------------------------------------------------------------------------
