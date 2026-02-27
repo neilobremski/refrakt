@@ -99,9 +99,17 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Consolidates all Suno knowledge: auth, hCaptcha, React form quirks, prompt variation strategy
   - Handles: open browser → inject cookies → create 3 prompt variations → fill/submit → poll → download
   - Knows about Advanced Options (male/female selector, exclude styles)
+- `bin/suno submit` — one-command browser automation for Suno submission
+  - Opens browser, injects cookies, creates 3 tag variations, fills/submits each, closes browser
+  - Auto-discovers new clip IDs via feed diffing; optional `--no-download` flag
+  - Replaces manual playwright-cli orchestration with a single pre-approvable command
+- `bin/refrakt-check` — post-pipeline completion validator
+  - Checks 8 steps: tags, lyrics, title, WIP candidates (6), output, cover art, album art, tracking
+  - Any missing step → exit 1; ALL CLEAR → exit 0. Run as final phase of every pipeline.
+- `lib/gemini_image.py` — Gemini API album art generation (square + widescreen)
 - `.claude/agents/artist.md` — Haiku agent for album/track artwork via Gemini (Nano Banana)
   - Generates square (1:1, ~2048px) for metadata and widescreen (16:9, ~2752px) for YouTube
-  - Browser automation at gemini.google.com with persistent Playwright profile
+  - Can use `lib/gemini_image.py` (API) or browser automation at gemini.google.com
   - Spawnable in background while other post-eval work proceeds
 - `.claude/agents/audio-critic.md` — Haiku agent for ruthless audio quality evaluation
   - Combines Gemini 2.5 Flash listening with librosa signal analysis
@@ -199,7 +207,8 @@ Full Suno knowledge (auth, API, hCaptcha, browser automation, React form quirks,
 - **Browser:** Always use `playwright-cli --headed --persistent --profile=.refrakt/playwright-profile` (captcha-free)
 - **Model:** `chirp-crow` = v5 (latest as of Feb 2026)
 - **Credits:** 10 per generation (= 2 clips). Pro tier: 2500/month.
-- **CLI:** `bin/suno auth|credits|feed|poll|download`, `bin/suno-fill-form`, `bin/prompts`
+- **CLI:** `bin/suno auth|credits|feed|poll|download|submit`, `bin/suno-fill-form`, `bin/prompts`
+- **Submit:** `bin/suno submit --index 0` — one command for 3 variations × 2 clips = 6 candidates
 
 ---
 
@@ -273,6 +282,8 @@ bin/suno-fill-form --dry-run             # preview without browser
 bin/suno auth                            # verify session and show user/credit info
 bin/suno credits                         # show remaining credits
 bin/suno feed [--page N]                 # list recent clips
+bin/suno submit --index 0               # submit with 3 tag variations (browser automation)
+bin/suno submit --index 0 --no-download # submit only, download later
 bin/suno poll <clip_id> --wait           # poll clip status until complete
 bin/suno download <clip_id> ...          # download completed clips (.m4a)
 
@@ -283,6 +294,10 @@ bin/suno-tag <clip_id> ...               # tag specific clips by ID prefix
 
 # Standalone download
 bin/download-tracks <clip_id> ...        # download clips (standalone utility)
+
+# Pipeline validation
+bin/refrakt-check                        # check all entries for completeness
+bin/refrakt-check --index 0              # check specific entry
 ```
 
 ---

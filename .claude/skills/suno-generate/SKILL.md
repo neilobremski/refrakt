@@ -65,6 +65,22 @@ Prompt: "Read .claude/agents/title-designer.md for instructions, then process pr
 
 This mines the refracted lyrics (for vocals) or research (for instrumentals) to find the most evocative image or phrase, and writes a compelling title that varies in structure (1-5 words, not always two abstract words).
 
+After the title-designer, spawn the title-critic agent to evaluate candidates:
+
+```
+Task tool: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/title-critic.md for instructions, then process prompts_data.json"
+```
+
+If the critic rejects, run the title-designer again with the feedback, then re-evaluate. Max 2 rejection rounds.
+
+**Spawn album art in background** — while waiting for title approval or later steps, spawn the artist agent to generate cover art (runs in parallel):
+
+```
+Task tool: subagent_type="general-purpose", model="haiku", run_in_background=true
+Prompt: "Read .claude/agents/artist.md for instructions. Generate album art for the track."
+```
+
 This writes `prompts_data.json`. Read that file to get the list of prompts. Each entry has:
 - `source_track_id` — Spotify track ID (for tracking)
 - `source_track_name` — original track name (for reference only, never sent to Suno)
@@ -90,134 +106,24 @@ Note the clip IDs that already exist. Save them for comparison in Phase 4.
 
 ---
 
-## Phase 3 — Browser Automation (Interactive)
+## Phase 3 — Submit to Suno
 
-This is the core interactive phase. You will control the browser step-by-step using `playwright-cli` commands via the Bash tool.
-
-### 3.1 — Open Browser
-
-```bash
-playwright-cli open --headed --persistent --profile=.refrakt/playwright-profile "https://suno.com/create"
-```
-
-**Important:** Always use `--headed --persistent --profile=.refrakt/playwright-profile`. The persistent profile avoids hCaptcha visual challenges. Without `--persistent`, hCaptcha will show image grids that block submission.
-
-Wait a few seconds for the page to load.
-
-### 3.2 — Inject Session Cookies
-
-Read `.refrakt/suno_session.json` to get `client_token` and `django_session_id`, then set cookies:
+Use `bin/suno submit` which handles the entire browser automation in one command:
+- Opens browser with persistent profile (captcha-free)
+- Injects session cookies
+- Creates 3 tag variations (vocal-led, genre-led, texture-led)
+- Fills form and clicks Create for each variation
+- Closes browser and discovers new clip IDs via feed diffing
 
 ```bash
-playwright-cli cookie-set __client "<client_token>" --domain=.suno.com --path=/ --secure --httpOnly
-playwright-cli cookie-set sessionid "<django_session_id>" --domain=.suno.com --path=/ --secure --httpOnly
+bin/suno submit --index 0                 # submit with 3 variations, poll + download
+bin/suno submit --index 0 --no-download   # submit only, download later
+bin/suno submit --index 0 --variations 1  # single variation (10 credits instead of 30)
 ```
 
-Then reload to apply:
+The command outputs new clip IDs when complete. If `--no-download` is not set, it automatically polls and downloads all clips.
 
-```bash
-playwright-cli reload
-```
-
-Wait a few seconds for the page to reload with the authenticated session.
-
-### 3.3 — Switch to Custom Mode
-
-Suno always opens in **Simple** mode by default. You must switch to Custom mode to access the Styles, Lyrics, and Title fields.
-
-Take a snapshot and look for the mode toggle buttons:
-
-```bash
-playwright-cli snapshot
-```
-
-The snapshot returns a YAML-like accessibility tree. Each interactive element has a `[ref=XXXX]` identifier. Find the "Custom" button and click it:
-
-```bash
-playwright-cli click <custom_ref>
-```
-
-**Typical snapshot pattern for the mode toggle:**
-```
-- button "Simple" [ref=eXXX]
-- button "Custom" [ref=eYYY] [cursor=pointer]
-```
-
-After clicking Custom, take another snapshot to confirm the form now shows Lyrics, Styles, and Title fields.
-
-**How to find elements:** Search the snapshot text for keywords. Elements look like:
-```
-- button "Custom" [ref=e42]
-- textbox "Write some lyrics..." [ref=e138]
-- textbox "darker, cry, slow buildup..." [ref=e205]
-- textbox "Song Title (Optional)" [ref=e300]
-- button "Create song" [ref=e400]
-```
-
-The ref values change every snapshot. Always take a fresh snapshot before looking for refs.
-
-### 3.4 — For Each Prompt: Fill and Submit
-
-For each prompt from `prompts_data.json`:
-
-#### a) Fill the form using `bin/suno-fill-form`
-
-This helper reads `prompts_data.json` and fills Styles, Title, Lyrics, and Instrumental toggle in a single `playwright-cli run-code` call — avoiding shell escaping issues with multi-line lyrics:
-
-```bash
-bin/suno-fill-form --index 0              # fill first prompt (0-based)
-bin/suno-fill-form --index 1              # fill second prompt
-bin/suno-fill-form --dry-run              # preview without touching browser
-```
-
-The helper uses Playwright's native locator API (CSS selectors on placeholder text) rather than snapshot ref IDs, so it's resilient to ref rotation.
-
-**If the prompt has an empty `prompt` field:** The lyricist agent and producer agent should have already populated the `prompt` and `tags` fields. If `prompt` is still empty, run the agents first before filling the form.
-
-**If `suno-fill-form` fails** (e.g., can't find a field), fall back to manual filling:
-
-1. Take a snapshot: `playwright-cli snapshot`
-2. Find the element refs by searching the snapshot
-3. Fill individually: `playwright-cli fill <ref> "<text>"`
-
-For multi-line lyrics in the manual fallback, use `playwright-cli run-code`:
-```bash
-playwright-cli run-code "async page => { await page.locator('textarea[placeholder*=\"lyric\" i]').first().fill('your lyrics here'); }"
-```
-
-#### b) Click Create
-
-```bash
-playwright-cli click <create_ref>
-```
-
-Wait ~3 seconds, then take a snapshot to check for captcha.
-
-#### c) Check for captcha
-
-Search the post-click snapshot for any of these strings (case-insensitive):
-- "Select everything"
-- "hCaptcha"
-- "Challenge Image"
-- "Verify Answers"
-- "captcha"
-- "Please verify"
-
-**If captcha detected:** Alert the user to solve it manually in the browser window. Take periodic snapshots to check if it clears. Once the captcha text disappears from the snapshot, continue.
-
-**If no captcha:** Proceed. With `--persistent`, captcha should not appear.
-
-#### d) Wait between submissions
-
-Wait ~12 seconds before the next prompt to let the generation queue settle.
-
-### 3.5 — Close Browser
-
-After all prompts are submitted:
-
-```bash
-playwright-cli close
-```
+**If `bin/suno submit` fails** (e.g., captcha appears, session expired), fall back to manual browser orchestration. See `.claude/agents/suno.md` for the step-by-step approach with `playwright-cli`.
 
 ---
 
@@ -265,11 +171,22 @@ Files are saved to `WIP_DIR/YYYY-MM-DD/` as `{Title}__{clip_id}.m4a` (Opus ~143k
 
 ---
 
-## Phase 6 — Update Tracking
+## Phase 6 — Album Art + Tracking
 
-Update `generated_tracks.json` to mark source tracks as generated. The file format is `{"track_ids": [...]}` — a JSON object with a `track_ids` array of Spotify track IDs.
+### 6.1 — Album Art
 
-Read the current file (or create `{"track_ids": []}` if it doesn't exist), append the `source_track_id` from each successfully submitted prompt, and write it back:
+If the artist agent was spawned in the background during Phase 1, check that it completed and generated cover art. If not, spawn it now:
+
+```
+Task tool: subagent_type="general-purpose", model="haiku"
+Prompt: "Read .claude/agents/artist.md for instructions. Generate album art for the track at index 0."
+```
+
+The artist agent generates square (1:1) for M4A metadata and widescreen (16:9) for YouTube, then embeds the square cover into the output M4A file.
+
+### 6.2 — Update Tracking
+
+Update `generated_tracks.json` to mark source tracks as generated:
 
 ```python
 .venv/bin/python -c "
@@ -284,6 +201,18 @@ with open('generated_tracks.json', 'w') as f: json.dump({'track_ids': sorted(ids
 ```
 
 Replace the track IDs with the actual `source_track_id` values from the submitted prompts.
+
+---
+
+## Phase 7 — Validate Completion
+
+Run `bin/refrakt-check` to verify all pipeline steps completed:
+
+```bash
+bin/refrakt-check --index 0
+```
+
+This checks 8 steps: tags, lyrics, title, WIP candidates (6), output winner, cover art embedded, album art files, tracking updated. Any `✗` means a step was missed — fix it before declaring done.
 
 ---
 
