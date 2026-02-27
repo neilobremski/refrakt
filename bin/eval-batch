@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""
+Evaluate a batch of Suno clips — librosa analysis + Gemini listening + batch similarity.
+
+Finds the best clip per track, prints a summary table.
+
+Usage:
+    bin/eval-batch                          # eval all clips in today's SunoTemp folder
+    bin/eval-batch --date 2026-02-26        # eval a specific date folder
+    bin/eval-batch --title "Fog Field"      # eval clips for a specific track only
+    bin/eval-batch --skip-gemini            # librosa only (fast, no API cost)
+    bin/eval-batch --threshold 0.90         # custom batch similarity threshold
+"""
+
+import argparse
+import glob
+import json
+import os
+import sys
+import time
+from collections import defaultdict
+from datetime import date
+from pathlib import Path
+
+# Add lib/ to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=str(Path(__file__).resolve().parent.parent / ".env"))
+
+from audio_analysis import full_critique, batch_similarity
+
+
+def get_temp_dir(date_str=None):
+    base = os.path.expanduser(os.getenv("SUNO_TEMP_DIR", "~/Google Drive/My Drive/SunoTemp/"))
+    if date_str is None:
+        date_str = date.today().isoformat()
+    return os.path.join(base, date_str)
+
+
+def find_clips(temp_dir, title_filter=None):
+    """Find all .m4a clips grouped by track title."""
+    tracks = defaultdict(list)
+    for f in sorted(glob.glob(os.path.join(temp_dir, "*.m4a"))):
+        basename = os.path.basename(f)
+        # Parse: Title__clipid.m4a
+        if "__" not in basename:
+            continue
+        title_part = basename.rsplit("__", 1)[0].replace("_", " ")
+        clip_id = basename.rsplit("__", 1)[1].replace(".m4a", "")
+
+        if title_filter and title_filter.lower() not in title_part.lower():
+            continue
+
+        tracks[title_part].append({"path": f, "clip_id": clip_id, "title": title_part})
+
+    return dict(tracks)
+
+
+def evaluate_track_clips(title, clips, tags="", mood="", is_instrumental=True,
+                         skip_gemini=False, sim_threshold=0.93):
+    """Evaluate all clips for a single track. Return results + winner."""
+    results = []
+
+    for clip in clips:
+        path = clip["path"]
+        cid = clip["clip_id"]
+
+        # Librosa
+        lr = full_critique(path, tags=tags, is_instrumental=is_instrumental)
+        v = lr["metrics"]["variety"]
+        s = lr["metrics"]["structure"]
+
+        result = {
+            "clip_id": cid,
+            "path": path,
+            "librosa_verdict": lr["verdict"],
+            "variety": v["variety_score"],
+            "dynamic_range": v["dynamic_range_db"],
+            "centroid_cv": v["centroid_cv"],
+            "onset_density": v["onset_density"],
+            "looped": s["is_looped"],
+            "section_sim": s["avg_section_similarity"],
+            "truncated": lr["metrics"]["truncation"].get("truncated", False),
+            "duration": lr["metrics"]["truncation"]["duration_seconds"],
+            "issues": lr["issues"],
+            "gemini_score": None,
+            "gemini_verdict": None,
+        }
+
+        # Gemini (optional)
+        if not skip_gemini:
+            try:
+                from gemini_audio import evaluate_track
+                gr = evaluate_track(path, tags, mood, title, is_instrumental)
+                result["gemini_score"] = gr.get("overall_score", 0)
+                result["gemini_verdict"] = gr.get("verdict", "?")
+                time.sleep(1)  # rate limit
+            except Exception as e:
+                result["gemini_score"] = None
+                result["gemini_verdict"] = f"ERROR: {e}"
+
+        results.append(result)
+
+    # Batch similarity
+    if len(clips) > 1:
+        paths = [c["path"] for c in clips]
+        _, flags = batch_similarity(paths, threshold=sim_threshold)
+    else:
+        flags = []
+
+    # Determine winner
+    def score_clip(r):
+        g = r["gemini_score"] or 0
+        return (
+            0 if r["looped"] or r["truncated"] else 1,
+            0 if r.get("gemini_verdict") == "Regenerate" else 1,
+            g,
+            r["variety"],
+            r["dynamic_range"],
+        )
+
+    passing = [r for r in results
+               if not r["looped"]
+               and not r["truncated"]
+               and r.get("gemini_verdict") != "Regenerate"
+               and r["librosa_verdict"] != "FAIL"]
+
+    if passing:
+        winner = max(passing, key=score_clip)
+    elif results:
+        winner = max(results, key=score_clip)
+    else:
+        winner = None
+
+    return results, flags, winner
+
+
+def print_track_results(title, results, flags, winner):
+    """Print a formatted table for one track."""
+    print(f"\n{'='*70}")
+    print(f"  {title}")
+    print(f"{'='*70}")
+
+    for r in results:
+        looped = " LOOPED" if r["looped"] else ""
+        trunc = " TRUNC" if r["truncated"] else ""
+        gemini = f"G={r['gemini_score']}/5" if r["gemini_score"] is not None else "G=skip"
+        is_winner = " *** WINNER" if winner and r["clip_id"] == winner["clip_id"] else ""
+        dur = f"{int(r['duration']//60)}:{int(r['duration']%60):02d}"
+
+        print(f"  {r['clip_id']:8s}  {dur}  var={r['variety']:.1f}  "
+              f"dyn={r['dynamic_range']:.1f}dB  {gemini}  "
+              f"{r['librosa_verdict']}{looped}{trunc}{is_winner}")
+
+    if flags:
+        for f in flags:
+            a = os.path.basename(f["track_a"]).split("__")[1].replace(".m4a", "")
+            b = os.path.basename(f["track_b"]).split("__")[1].replace(".m4a", "")
+            label = "REJECT" if f["similarity"] > 0.93 else "WARN"
+            print(f"  SIM {f['similarity']:.3f}: {a} <-> {b} ({label})")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate a batch of Suno clips")
+    parser.add_argument("--date", default=None, help="Date folder (YYYY-MM-DD)")
+    parser.add_argument("--title", default=None, help="Filter by track title")
+    parser.add_argument("--skip-gemini", action="store_true", help="Skip Gemini eval (librosa only)")
+    parser.add_argument("--threshold", type=float, default=0.93, help="Batch similarity threshold")
+    parser.add_argument("--tags", default="", help="Tags for all tracks (or reads from prompts_data.json)")
+    parser.add_argument("--instrumental", action="store_true", default=None, help="Force instrumental mode")
+    args = parser.parse_args()
+
+    temp_dir = get_temp_dir(args.date)
+    if not os.path.exists(temp_dir):
+        print(f"Error: {temp_dir} does not exist")
+        sys.exit(1)
+
+    tracks = find_clips(temp_dir, args.title)
+    if not tracks:
+        print(f"No clips found in {temp_dir}" + (f" matching '{args.title}'" if args.title else ""))
+        sys.exit(1)
+
+    print(f"Found {sum(len(v) for v in tracks.values())} clips across {len(tracks)} tracks in {temp_dir}")
+
+    # Try to load tags from prompts_data.json
+    prompts_tags = {}
+    for pfile in ["prompts_data.json", "prompts_data_ww.json", "prompts_data_backup.json"]:
+        if os.path.exists(pfile):
+            with open(pfile) as f:
+                for p in json.load(f):
+                    t = p.get("invented_title", "")
+                    if t:
+                        prompts_tags[t] = {
+                            "tags": p.get("tags", ""),
+                            "is_instrumental": p.get("make_instrumental", True),
+                        }
+
+    winners = {}
+    for title in sorted(tracks.keys()):
+        clips = tracks[title]
+        info = prompts_tags.get(title, {})
+        tags = args.tags or info.get("tags", "")
+        is_inst = args.instrumental if args.instrumental is not None else info.get("is_instrumental", True)
+
+        results, flags, winner = evaluate_track_clips(
+            title, clips, tags=tags, mood="", is_instrumental=is_inst,
+            skip_gemini=args.skip_gemini, sim_threshold=args.threshold,
+        )
+        print_track_results(title, results, flags, winner)
+
+        if winner:
+            winners[title] = winner
+
+    # Summary
+    print(f"\n{'='*70}")
+    print("  WINNERS")
+    print(f"{'='*70}")
+    for title in sorted(winners.keys()):
+        w = winners[title]
+        gemini = f"G={w['gemini_score']}/5" if w["gemini_score"] is not None else ""
+        dur = f"{int(w['duration']//60)}:{int(w['duration']%60):02d}"
+        print(f"  {title:30s}  {w['clip_id']:8s}  {dur}  var={w['variety']:.1f}  {gemini}")
+
+    # Save results
+    results_path = os.path.join(temp_dir, "_eval_results.json")
+    with open(results_path, "w") as f:
+        json.dump(winners, f, indent=2, default=str)
+    print(f"\nResults saved to {results_path}")
+
+
+if __name__ == "__main__":
+    main()

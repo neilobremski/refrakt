@@ -323,6 +323,8 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
   - Structure: `SUNO_TEMP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
   - All 6 candidates (3 prompt variations × 2 clips) go here
   - Audio-critic evaluates, picks best, copies winner to `output/`
+  - Also stores: research files, batch prompts, eval results, album art, track journals
+  - **All temp/working files go here** — never leave `_`-prefixed files in project root
 - Final audio: `output/YYYY-MM-DD/{Title}.m4a` — clean filename, no timestamp prefix, no clip ID
   - For albums: `output/{Album Name}/##_{Title}.m4a`
 - Suno session: `.suno_session.json` (gitignored)
