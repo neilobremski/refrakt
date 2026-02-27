@@ -337,6 +337,181 @@ def cmd_download(args):
 
 
 # ---------------------------------------------------------------------------
+# Submit (browser automation)
+# ---------------------------------------------------------------------------
+
+PROFILE_DIR = str(_BASE_DIR / ".refrakt" / "playwright-profile")
+PROMPTS_FILE = str(_BASE_DIR / "prompts_data.json")
+
+
+def pw(*args: str, timeout: int = 30) -> str:
+    """Run a playwright-cli command, return stdout."""
+    cmd = ["playwright-cli"] + list(args)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        print(f"  WARN: playwright-cli: {result.stderr.strip()}", file=sys.stderr)
+    return result.stdout
+
+
+def _submit_one_variation(index: int, variation_label: str):
+    """Reload page, fill form, click Create for one prompt variation."""
+    pw("reload")
+    time.sleep(3)
+
+    # Fill form via suno-fill-form helper
+    fill_cmd = [
+        sys.executable, str(_BASE_DIR / "bin" / "suno-fill-form"),
+        "--index", str(index),
+    ]
+    fill = subprocess.run(fill_cmd, capture_output=True, text=True, timeout=30)
+    if fill.returncode != 0:
+        print(f"  ERROR filling form: {fill.stderr.strip()}", file=sys.stderr)
+        return False
+    print(f"  {variation_label}: Form filled")
+
+    time.sleep(2)
+
+    # Click Create
+    output = pw(
+        "run-code",
+        "async page => { await page.getByRole('button', { name: 'Create song' }).click(); return 'ok'; }",
+        timeout=15,
+    )
+    if "ok" not in output:
+        print(f"  ERROR clicking Create: {output}", file=sys.stderr)
+        return False
+    print(f"  {variation_label}: Create clicked")
+
+    time.sleep(5)
+    return True
+
+
+def cmd_submit(args):
+    """Open browser, submit 3 prompt variations, close browser."""
+    index = args.index
+    variations = args.variations
+
+    # Load prompts
+    with open(PROMPTS_FILE) as f:
+        prompts = json.load(f)
+    if index < 0 or index >= len(prompts):
+        print(f"ERROR: index {index} out of range (0-{len(prompts) - 1})", file=sys.stderr)
+        sys.exit(1)
+
+    entry = prompts[index]
+    title = entry.get("invented_title", "(untitled)")
+    base_tags = entry.get("tags", "")
+    print(f"Submitting: {title}")
+    print(f"  Base tags: {base_tags[:80]}...")
+    print(f"  Variations: {variations}")
+
+    # Build tag variations by rearranging tag order and tweaking BPM
+    tag_parts = [t.strip() for t in base_tags.split(",")]
+
+    # Extract BPM tag if present
+    bpm_tag = None
+    other_tags = []
+    for t in tag_parts:
+        if "bpm" in t.lower():
+            bpm_tag = t
+        else:
+            other_tags.append(t)
+
+    bpm_val = None
+    if bpm_tag:
+        import re as _re
+        m = _re.search(r"(\d+)", bpm_tag)
+        if m:
+            bpm_val = int(m.group(1))
+
+    # V1 = base (as-is), V2 = genre-led (+5 BPM), V3 = texture-led (-7 BPM)
+    tag_variations = [base_tags]  # V1
+    if variations >= 2 and len(other_tags) >= 4:
+        # V2: move genre tags (typically index 3-4) to front
+        v2_tags = other_tags[3:5] + other_tags[:3] + other_tags[5:]
+        v2_bpm = f"{bpm_val + 5} BPM" if bpm_val else bpm_tag
+        if v2_bpm:
+            v2_tags.append(v2_bpm)
+        tag_variations.append(", ".join(v2_tags))
+    if variations >= 3 and len(other_tags) >= 4:
+        # V3: move texture tags (typically index 4-5) to front
+        v3_tags = other_tags[4:6] + other_tags[:4] + other_tags[6:]
+        v3_bpm = f"{bpm_val - 7} BPM" if bpm_val else bpm_tag
+        if v3_bpm:
+            v3_tags.append(v3_bpm)
+        tag_variations.append(", ".join(v3_tags))
+
+    # Snapshot feed before
+    session = load_session()
+    jwt = refresh_jwt(session)
+    feed_before = {c["id"] for c in get_feed(session, jwt, page=0)}
+
+    # Open browser
+    print(f"\nOpening browser...")
+    pw("open", "--headed", "--persistent",
+       f"--profile={PROFILE_DIR}", "https://suno.com/create", timeout=15)
+    time.sleep(3)
+
+    # Inject cookies
+    client_token = session["client_token"]
+    django_session = session["django_session_id"]
+    pw("cookie-set", "__client", client_token,
+       "--domain=.suno.com", "--path=/", "--secure", "--httpOnly")
+    pw("cookie-set", "sessionid", django_session,
+       "--domain=.suno.com", "--path=/", "--secure", "--httpOnly")
+    pw("reload")
+    time.sleep(4)
+    print("  Cookies injected, page reloaded")
+
+    # Submit each variation
+    successful = 0
+    for i, var_tags in enumerate(tag_variations):
+        label = f"V{i + 1}"
+
+        # Temporarily set variation tags
+        prompts[index]["tags"] = var_tags
+        with open(PROMPTS_FILE, "w") as f:
+            json.dump(prompts, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+
+        print(f"\n  --- {label}: {var_tags[:70]}... ---")
+        if _submit_one_variation(index, label):
+            successful += 1
+
+    # Restore base tags
+    prompts[index]["tags"] = base_tags
+    with open(PROMPTS_FILE, "w") as f:
+        json.dump(prompts, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    print(f"\n  Tags restored to base")
+
+    # Close browser
+    pw("close")
+    print("  Browser closed")
+
+    # Discover new clips
+    print(f"\nChecking feed for new clips...")
+    jwt = refresh_jwt(session)  # refresh in case it expired
+    time.sleep(3)
+    feed_after = {c["id"] for c in get_feed(session, jwt, page=0)}
+    new_ids = feed_after - feed_before
+
+    print(f"\n{'=' * 60}")
+    print(f"  Submitted: {successful}/{len(tag_variations)} variations")
+    print(f"  New clips: {len(new_ids)}")
+    for cid in sorted(new_ids):
+        print(f"    {cid}")
+    print(f"{'=' * 60}")
+
+    if new_ids and not args.no_download:
+        print(f"\nPolling {len(new_ids)} clip(s)...")
+        clips = wait_for_completion(session, jwt, list(new_ids))
+        # Re-run download with the real base tags restored
+        args_dl = argparse.Namespace(clip_ids=list(new_ids))
+        cmd_download(args_dl)
+
+
+# ---------------------------------------------------------------------------
 # Main / argparse
 # ---------------------------------------------------------------------------
 
@@ -371,6 +546,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl = sub.add_parser("download", help="Download completed clips as .m4a (Opus ~143kbps)")
     p_dl.add_argument("clip_ids", nargs="+", metavar="clip_id")
     p_dl.set_defaults(func=cmd_download)
+
+    # submit
+    p_sub = sub.add_parser("submit", help="Submit prompts via browser (3 tag variations)")
+    p_sub.add_argument("--index", type=int, default=0,
+                        help="Prompt index in prompts_data.json (default: 0)")
+    p_sub.add_argument("--variations", type=int, default=3, choices=[1, 2, 3],
+                        help="Number of tag variations (default: 3)")
+    p_sub.add_argument("--no-download", action="store_true",
+                        help="Skip polling and downloading after submission")
+    p_sub.set_defaults(func=cmd_submit)
 
     return parser
 

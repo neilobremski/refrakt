@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""
+refrakt-check — Post-pipeline completion validator.
+
+Checks that all required artifacts exist for a track in prompts_data.json.
+Flags any missing steps so nothing gets skipped.
+
+Usage:
+    bin/refrakt-check                  # check all entries
+    bin/refrakt-check --index 0        # check specific entry
+"""
+
+import glob as _glob_mod
+import json
+import os
+import site
+import sys
+from datetime import date
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_sp = _glob_mod.glob(str(PROJECT_ROOT / ".venv/lib/python*/site-packages"))
+if _sp:
+    site.addsitedir(_sp[0])
+
+from dotenv import load_dotenv
+
+load_dotenv(PROJECT_ROOT / ".env")
+
+PROMPTS_FILE = PROJECT_ROOT / "prompts_data.json"
+WIP_DIR = Path(os.path.expanduser(os.getenv("WIP_DIR", "~/Google Drive/My Drive/SunoTemp/")))
+OUT_DIR = Path(os.path.expanduser(os.getenv("OUT_DIR", "~/Downloads")))
+TRACKING_FILE = PROJECT_ROOT / "generated_tracks.json"
+
+
+def sanitize_filename(name: str) -> str:
+    import re
+    name = re.sub(r'[\\/*?:"<>|]', "", name)
+    return name.strip().replace(" ", "_")
+
+
+def check_entry(index: int, entry: dict) -> list[tuple[bool, str]]:
+    """Check all pipeline steps for one prompts_data entry. Returns list of (pass, message)."""
+    results = []
+    title = entry.get("invented_title", "")
+    safe_title = sanitize_filename(title) if title else ""
+    is_instrumental = entry.get("make_instrumental", False)
+    today = date.today().isoformat()
+
+    # 1. Prompt fields
+    tags = entry.get("tags", "")
+    results.append((bool(tags), f"Tags: {len(tags)}c" if tags else "Tags: MISSING"))
+
+    prompt = entry.get("prompt", "")
+    if is_instrumental:
+        results.append((bool(prompt), f"Metatags: {len(prompt)}c" if prompt else "Metatags: MISSING"))
+    else:
+        results.append((bool(prompt), f"Lyrics: {len(prompt)}c" if prompt else "Lyrics: MISSING"))
+
+    results.append((bool(title), f"Title: \"{title}\"" if title else "Title: MISSING"))
+
+    # Check for leftover temp fields
+    if "_title_candidates" in entry:
+        results.append((False, "Cleanup: _title_candidates still present"))
+    if "_title_rejected" in entry:
+        results.append((False, "Cleanup: _title_rejected still present"))
+
+    # 2. WIP candidates (look in any date subfolder)
+    if safe_title:
+        wip_pattern = str(WIP_DIR / "**" / f"*{safe_title}__*.m4a")
+        wip_files = _glob_mod.glob(wip_pattern, recursive=True)
+        results.append(
+            (len(wip_files) >= 6,
+             f"WIP candidates: {len(wip_files)} clips" + (" (expected 6)" if 0 < len(wip_files) < 6 else ""))
+        )
+    else:
+        results.append((False, "WIP candidates: can't check (no title)"))
+
+    # 3. Output file
+    if safe_title:
+        out_pattern = str(OUT_DIR / "**" / f"*{title}*.*")
+        out_files = [f for f in _glob_mod.glob(out_pattern, recursive=True)
+                     if f.endswith((".m4a", ".mp3"))]
+        results.append(
+            (len(out_files) >= 1,
+             f"Output: {len(out_files)} files in OUT_DIR" if out_files else "Output: no winner in OUT_DIR")
+        )
+    else:
+        results.append((False, "Output: can't check (no title)"))
+
+    # 4. Cover art embedded in output M4A
+    cover_embedded = False
+    if out_files:
+        m4a_files = [f for f in out_files if f.endswith(".m4a")]
+        if m4a_files:
+            try:
+                from mutagen.mp4 import MP4
+                m4a = MP4(m4a_files[0])
+                cover_embedded = "covr" in m4a.tags if m4a.tags else False
+            except Exception:
+                pass
+    results.append(
+        (cover_embedded, "Cover art: embedded in M4A" if cover_embedded else "Cover art: NOT embedded in M4A")
+    )
+
+    # 5. Album art files in WIP
+    if safe_title:
+        art_patterns = [
+            str(WIP_DIR / "**" / f"*cover*{safe_title}*"),
+            str(WIP_DIR / "**" / f"*cover*"),
+        ]
+        art_files = []
+        for p in art_patterns:
+            art_files.extend(_glob_mod.glob(p, recursive=True))
+        art_files = [f for f in art_files if f.endswith((".png", ".jpg", ".jpeg"))]
+        # Deduplicate
+        art_files = list(set(art_files))
+        results.append(
+            (len(art_files) >= 1,
+             f"Album art: {len(art_files)} image(s) found" if art_files else "Album art: MISSING")
+        )
+    else:
+        results.append((False, "Album art: can't check (no title)"))
+
+    # 6. generated_tracks.json
+    source_id = entry.get("source_track_id", "")
+    if source_id:
+        tracked = False
+        if TRACKING_FILE.exists():
+            try:
+                with open(TRACKING_FILE) as f:
+                    tracking = json.load(f)
+                tracked = source_id in tracking.get("track_ids", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+        results.append(
+            (tracked,
+             "Tracking: source track recorded" if tracked else "Tracking: source track NOT in generated_tracks.json")
+        )
+
+    return results
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Validate pipeline completion for prompts_data.json entries")
+    parser.add_argument("--index", type=int, default=None, help="Check specific entry (default: all)")
+    args = parser.parse_args()
+
+    if not PROMPTS_FILE.exists():
+        print(f"ERROR: {PROMPTS_FILE} not found", file=sys.stderr)
+        sys.exit(1)
+
+    with open(PROMPTS_FILE) as f:
+        prompts = json.load(f)
+
+    indices = [args.index] if args.index is not None else range(len(prompts))
+    all_pass = True
+
+    for i in indices:
+        if i < 0 or i >= len(prompts):
+            print(f"ERROR: index {i} out of range (0-{len(prompts) - 1})", file=sys.stderr)
+            sys.exit(1)
+
+        entry = prompts[i]
+        title = entry.get("invented_title", "(untitled)")
+        source = entry.get("source_track_name", "?")
+        print(f"[{i}] {title} (from: {source})")
+
+        results = check_entry(i, entry)
+        missing = []
+        for passed, msg in results:
+            icon = "\u2713" if passed else "\u2717"
+            print(f"  {icon} {msg}")
+            if not passed:
+                missing.append(msg)
+
+        if missing:
+            all_pass = False
+            print(f"  --- {len(missing)} step(s) incomplete ---")
+        else:
+            print(f"  --- ALL CLEAR ---")
+        print()
+
+    sys.exit(0 if all_pass else 1)
+
+
+if __name__ == "__main__":
+    main()
