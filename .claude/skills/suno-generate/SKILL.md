@@ -10,6 +10,17 @@ argument-hint: "[--count N] [--seed SEED] [--no-download]"
 
 End-to-end pipeline: generate prompts, open a browser, interactively fill the Suno custom-mode form, submit each prompt, poll for completion, and download results.
 
+**Preferred entry point:** Use `rf run` (the unified pipeline orchestrator) instead of manually running each phase below. It handles sequencing, state tracking, and resume:
+
+```bash
+rf run --playlist "NeilPop" --track "Song Name"   # full pipeline
+rf run --playlist "NeilPop" --random               # random track
+rf run --resume                                     # resume after agent completes
+rf status                                           # check progress
+```
+
+The phases below document what `rf run` orchestrates under the hood.
+
 **This is an interactive knowledge skill.** Claude navigates the browser by reading snapshots and making decisions dynamically — not by running a single script.
 
 ## Arguments

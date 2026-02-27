@@ -138,15 +138,15 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Save tracklist intentions to `_tracklist.json` for re-generation reference
   - Full pipeline: research palette → build prompts → title/critic agents → submit → Gemini eval → user picks A/B → tag → concat → YouTube
   - First soundtrack: "Alive Through the Rift" by Denumerator (16 tracks, futuristic blues + industrial rock)
-- `lib/dalle_art.py` — DALL-E 3 album art generation (legacy, replaced by Gemini)
-  - Generates square (1024x1024) for MP3 metadata and widescreen (1792x1024) for YouTube
-  - API key in `.env` as `OPENAI_API_KEY`
-- **Album art via Gemini (Nano Banana)** — preferred method
+- `lib/dalle_art.py` — **DEPRECATED, DO NOT USE.** DALL-E 3 was replaced by Gemini.
+- **Album art via Gemini (Nano Banana)** — the ONLY method for album art
   - Generate via Playwright browser automation at gemini.google.com (Thinking model)
+  - **Never use DALL-E, the Gemini API (`lib/gemini_image.py`), or any other method.** Browser only.
   - Widescreen 16:9 for YouTube, square 1:1 for MP3 metadata
   - Add album title + artist name as text on the image (Gemini handles text well)
-  - Free (no API cost), higher quality than DALL-E, supports iterative refinement
+  - Free (no API cost), higher quality than DALL-E (~2048px vs 1024px), supports iterative refinement
   - **Never read Gemini images with Claude's Read tool** — they're >2000px and break context
+  - For widescreen, Gemini needs strong prompting: "WIDESCREEN LANDSCAPE, much wider than tall, like a YouTube banner (~2752x1536)"
 - `/autonomous-album` skill — fully autonomous concept album creation
   - From news topic to YouTube in ~45 minutes with zero human input (except auth)
   - Pipeline: Perplexity → story → beats → prompts → Gemini art → Suno → Gemini eval → auto-select → tag → concat → YouTube
@@ -256,10 +256,20 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
 All CLI commands are in `bin/`. Add to `$PATH` or run from project root.
 
 ```bash
-# Full pipeline (end-to-end: prompts -> browser -> poll -> download)
-bin/suno-generate --count 2              # generate 2 songs
+# Unified pipeline orchestrator (preferred entry point)
+rf run --playlist "NeilPop" --track "Song for Zula"   # full pipeline end-to-end
+rf run --playlist "NeilPop" --random                   # random track, full pipeline
+rf run --resume                                        # resume from last incomplete stage
+rf run --from tags --until submit                      # run specific stage range
+rf run --only eval                                     # re-run single stage
+rf run --playlist "NeilPop" --random --dry-run         # preview without executing
+rf status                                              # show current pipeline state
+rf list --playlist "NeilPop" --not-generated            # list tracks not yet processed
+rf credits                                             # Suno credits remaining
+
+# Legacy full pipeline (end-to-end: prompts -> browser -> poll -> download)
+bin/suno-generate --count 2              # generate 2 songs (instrumental only)
 bin/suno-generate --count 5 --seed 42    # reproducible batch of 5
-bin/suno-generate --count 1 --no-download  # submit only, download later
 
 # Individual pipeline steps
 bin/fetch-playlist                       # Step 1a: fetch Spotify playlist data
