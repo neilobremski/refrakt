@@ -150,6 +150,10 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
 - `/autonomous-album` skill — fully autonomous concept album creation
   - From news topic to YouTube in ~45 minutes with zero human input (except auth)
   - Pipeline: Perplexity → story → beats → prompts → Gemini art → Suno → Gemini eval → auto-select → tag → concat → YouTube
+- **Album concatenation** — `ffmpeg -f concat` strips ALL metadata and cover art
+  - After concat, MUST re-tag the full album MP3 with mutagen: title, artist, album, year, genre, cover art
+  - Use `-c:a libmp3lame -b:a 320k` (not `-c copy`) to fix duration headers on variable-bitrate MP3s
+  - Copy tracks to temp dir with numeric names first to avoid path/space issues in concat file
 - **YouTube upload** workflow via Playwright browser automation
   - Create video from album: `ffmpeg -loop 1 -i cover.jpeg -i album.mp3 -c:v libx264 -tune stillimage -c:a aac -b:a 320k -pix_fmt yuv420p -shortest output.mp4`
   - **Use 16:9 widescreen image (1920x1080) for YouTube** — square album art crops badly
