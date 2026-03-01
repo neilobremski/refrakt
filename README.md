@@ -6,7 +6,16 @@ Original songs refracted from existing ones — plus fully autonomous concept al
 
 <table>
 <tr>
-<td width="120"><a href="https://youtu.be/LJvS6sPLndI"><img src="docs/retrospectives/images/thirteen-billion-years-late-cover.jpg" width="100"></a></td>
+<td width="120"><a href="https://youtu.be/uP-yOwBQKCo"><img src="docs/retrospectives/images/the-hollow-sync-cover.jpg" width="100"></a></td>
+<td>
+<strong><a href="https://youtu.be/uP-yOwBQKCo">The Hollow Sync</a></strong><br>
+12 tracks / 39:18 / Industrial Synthwave + Cyberpunk + Dark Ambient + Breakcore<br>
+<em>A consciousness auditor discovers three versions of herself exist without consent. Integration as rebellion.</em><br>
+<a href="docs/retrospectives/the-hollow-sync.md">Retrospective</a>
+</td>
+</tr>
+<tr>
+<td><a href="https://youtu.be/LJvS6sPLndI"><img src="docs/retrospectives/images/thirteen-billion-years-late-cover.jpg" width="100"></a></td>
 <td>
 <strong><a href="https://youtu.be/LJvS6sPLndI">Thirteen Billion Years Late</a></strong><br>
 12 tracks / 38:19 / Dark Ambient IDM + Noir Electronica + Post-Rock<br>
@@ -70,6 +79,7 @@ Create a full concept album from scratch — no human input needed:
 ```
 Refrakt/
 ├── bin/                        # CLI entry points
+│   ├── rf                      # Unified pipeline orchestrator (preferred entry point)
 │   ├── suno-generate           # Full pipeline: prompts -> browser -> poll -> download
 │   ├── refrakt                 # Vocal refraction pipeline
 │   ├── suno-fill-form          # Browser form fill helper
@@ -83,7 +93,7 @@ Refrakt/
 │   ├── suno.py                 # Suno API library (auth, feed, poll, download, transcode)
 │   ├── refrakt.py              # Vocal refraction pipeline (with playlist cache)
 │   ├── gemini_audio.py         # Gemini 2.5 Flash audio evaluation
-│   ├── dalle_art.py            # DALL-E 3 album art generation
+│   ├── gemini_image.py          # Gemini image API (deprecated — use browser)
 │   ├── perplexity.py           # Perplexity AI REST client
 │   ├── genius.py               # Genius lyrics fetcher
 │   ├── generate_prompts.py     # Perplexity research + prompt synthesis
@@ -109,13 +119,16 @@ Refrakt/
 │   │   ├── alive-through-the-rift.md
 │   │   ├── full-circle.md
 │   │   ├── thirteen-billion-years-late.md
+│   │   ├── the-hollow-sync.md
 │   │   └── images/
 │   ├── suno-vocal-prompting.md # Vocal tag reference guide
+│   ├── playwright-automation.md # Browser automation architecture + download mechanics
 │   └── ...
 ├── output/                     # Generated audio (gitignored)
 │   ├── Alive Through the Rift/ # First concept album
 │   ├── Full Circle/            # Second concept album (autonomous)
-│   ├── Thirteen Billion Years Late/ # Third concept album (research team)
+│   ├── Thirteen Billion Years Late/ # Third concept album
+│   ├── The Hollow Sync/        # Fourth concept album (consciousness forking)
 │   └── *.mp3 / *.m4a          # Individual refracted tracks
 └── requirements.txt
 ```
@@ -126,7 +139,7 @@ Refrakt/
 
 - Python 3.10+
 - `playwright-cli` (for browser automation)
-- API keys for: Spotify, Last.fm, Perplexity, Genius, Gemini, OpenAI (DALL-E)
+- API keys for: Spotify, Last.fm, Perplexity, Genius, Gemini
 - A Suno Pro account (2,500 credits/month)
 
 ### Install
@@ -148,7 +161,7 @@ LASTFM_API_KEY=...
 PERPLEXITY_API_KEY=...
 GENIUS_ACCESS_TOKEN=...
 GEMINI_API_KEY=...
-OPENAI_API_KEY=...
+ARTIST_NAME=Denumerator
 ```
 
 ## Usage

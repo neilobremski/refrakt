@@ -138,6 +138,7 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Save tracklist intentions to `_tracklist.json` for re-generation reference
   - Full pipeline: research palette → build prompts → title/critic agents → submit → Gemini eval → user picks A/B → tag → concat → YouTube
   - First soundtrack: "Alive Through the Rift" by Denumerator (16 tracks, futuristic blues + industrial rock)
+  - "The Hollow Sync" by Denumerator (12 tracks, industrial synthwave + cyberpunk + dark ambient, sci-fi consciousness-forking concept)
 - `lib/dalle_art.py` — **DEPRECATED, DO NOT USE.** DALL-E 3 was replaced by Gemini.
 - **Album art via Gemini (Nano Banana)** — the ONLY method for album art
   - Generate via Playwright browser automation at gemini.google.com (Thinking model)
@@ -147,6 +148,8 @@ The playlist is instrumental/ambient. The aim is to create original Suno-generat
   - Free (no API cost), higher quality than DALL-E (~2048px vs 1024px), supports iterative refinement
   - **Never read Gemini images with Claude's Read tool** — they're >2000px and break context
   - For widescreen, Gemini needs strong prompting: "WIDESCREEN LANDSCAPE, much wider than tall, like a YouTube banner (~2752x1536)"
+  - **Downloads are automatic:** `playwright-cli click <ref>` on the download button → file auto-saves to `.playwright-cli/` in CWD. **Never use `run-code` with `page.waitForEvent('download')`** — it is unreliable with Gemini's blob URLs.
+  - Full technical docs: `docs/playwright-automation.md`
 - `/autonomous-album` skill — fully autonomous concept album creation
   - From news topic to YouTube in ~45 minutes with zero human input (except auth)
   - Pipeline: Perplexity → story → beats → prompts → Gemini art → Suno → Gemini eval → auto-select → tag → concat → YouTube
@@ -239,7 +242,8 @@ Example: "Semi Detached" → something like "Hollow Transit" or "Glass Quarter" 
   - `.refrakt/caches/playlist.json` — Spotify playlist cache (24-hour TTL, avoids rate limits)
   - `.refrakt/suno_session.json` — Suno auth session
   - `.refrakt/playwright-profile/` — persistent browser profile (captcha-free Suno submission)
-  - `.refrakt/playwright-cli/` — Playwright traces and downloads
+  - `.refrakt/playwright-cli/` — Playwright traces (legacy path, may not exist)
+- `.playwright-cli/` — Playwright output: screenshots, snapshots, and **downloaded files** (in CWD, not `.refrakt/`)
 - WIP audio (candidates): `WIP_DIR` (from `.env`, default `~/Google Drive/My Drive/SunoTemp/`)
   - Structure: `WIP_DIR/YYYY-MM-DD/{Title}__{clip_id}.m4a`
   - All 6 candidates (3 prompt variations × 2 clips) go here
