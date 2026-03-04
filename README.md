@@ -45,6 +45,20 @@ Original songs refracted from existing ones — plus fully autonomous concept al
 
 All albums by **Denumerator**. Each links to YouTube (full album) and a retrospective with the story behind it.
 
+### Singles
+
+<table>
+<tr>
+<td width="120"><a href="https://youtu.be/kc8m-uQSykw"><img src="docs/retrospectives/images/enter-pod-man-cover.jpg" width="100"></a></td>
+<td>
+<strong><a href="https://youtu.be/kc8m-uQSykw">Enter Pod-man</a></strong><br>
+Single / 3:44 / Thrash Metal (Parody)<br>
+<em>"Take my hand, we're off to Kubernetes land" — Enter Sandman rewritten for DevOps.</em><br>
+<a href="docs/retrospectives/enter-pod-man.md">Retrospective</a>
+</td>
+</tr>
+</table>
+
 ---
 
 ## What It Does
